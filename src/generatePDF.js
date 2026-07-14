@@ -6,13 +6,48 @@ function formatNumber(n) {
 }
 
 export async function generatePDF(cotizacion) {
-  const { cliente, items, porcentajes, numero, fecha } = cotizacion;
+  const { cliente, items, porcentajes, numero, fecha, tipoImpuesto = 'IVA', descuentoTotal = 0, descuentoTipo = 'porcentaje', textoIntro } = cotizacion;
   const doc = new jsPDF({ unit: 'pt', format: 'letter' });
   const pageWidth  = doc.internal.pageSize.getWidth();   // 612
   const pageHeight = doc.internal.pageSize.getHeight();  // 792
   const ML = 40;
   const MR = 40;
   const CW = pageWidth - ML - MR;
+
+  // Calcular subtotal por ítem incluyendo descuentos
+  const calcularSubtotalItem = (it) => {
+    const totalBruto = it.cant * it.precio;
+    if (it.descuento && it.descuento > 0) {
+      const descuentoValor = (it.descuento / 100) * totalBruto;
+      return totalBruto - descuentoValor;
+    }
+    return totalBruto;
+  };
+
+  const subtotal = items.reduce((s, it) => s + calcularSubtotalItem(it), 0);
+  const vAdmin  = subtotal * (porcentajes.admin  / 100);
+  const vImprev = subtotal * (porcentajes.imprev / 100);
+  const vUtil   = subtotal * (porcentajes.util   / 100);
+  
+  let vImpuesto;
+  if (tipoImpuesto === 'IVA') {
+    vImpuesto = vUtil * (porcentajes.iva / 100);
+  } else { // IU
+    vImpuesto = subtotal * (porcentajes.iva / 100);
+  }
+
+  let totalAntesDescuento = subtotal + vAdmin + vImprev + vUtil + vImpuesto;
+  let descuentoTotalValor;
+  if (descuentoTotal > 0) {
+    if (descuentoTipo === 'porcentaje') {
+      descuentoTotalValor = (descuentoTotal / 100) * totalAntesDescuento;
+    } else {
+      descuentoTotalValor = descuentoTotal;
+    }
+  } else {
+    descuentoTotalValor = 0;
+  }
+  const total = totalAntesDescuento - descuentoTotalValor;
 
   const loadImage = (url) =>
     new Promise((resolve, reject) => {
@@ -192,23 +227,21 @@ export async function generatePDF(cotizacion) {
     doc.setTextColor(255, 255, 255);
     doc.text(String(numero || ''), dbX + 44, d2Cy + 13);
 
-    // ── INTRO TEXT ───────────────────────────────────────────────
+    // ── INTRO TEXT (Editable) ───────────────────────────────────────────────
     const introY = boxY + cbH + 8;
     doc.setFontSize(10.5);
     doc.setTextColor(60, 60, 60);
     doc.setFont('helvetica', 'normal');
-    doc.text('De acuerdo a su amable solicitud tenemos el gusto de enviarle la siguiente', ML, introY);
-    doc.setFontSize(10.5);
-    doc.setFont('helvetica', 'bold');
-    const boldPart = 'propuesta comercial';
-    doc.text(boldPart, ML, introY + 15);
-    const boldWidth = doc.getTextWidth(boldPart);
-    doc.setFont('helvetica', 'normal');
-    // Add a small explicit gap to avoid fonts rendering flush
-    doc.text('para su respectivo estudio:', ML + boldWidth + 3, introY + 15);
+    
+    const defaultIntro = 'De acuerdo a su amable solicitud tenemos el gusto de enviarle la siguiente propuesta comercial para su respectivo estudio:';
+    const finalIntro = textoIntro || defaultIntro;
+    
+    const lines = doc.splitTextToSize(finalIntro, CW);
+    doc.text(lines, ML, introY);
 
     // ── TABLE BAND ───────────────────────────────────────────────
-    const tblBandY = introY + 22;
+    const lineCount = lines.length;
+    const tblBandY = introY + (lineCount * 14) + 8;
     doc.setFillColor(0, 48, 135);
     doc.roundedRect(ML, tblBandY, CW, 28, 7, 7, 'F');
     doc.rect(ML, tblBandY + 14, CW, 14, 'F');
@@ -218,43 +251,28 @@ export async function generatePDF(cotizacion) {
     doc.text('SUMINISTRO E INSTALACIÓN DE:', ML + 18, tblBandY + 19);
 
     // ── SMART DYNAMIC TABLE SIZING ───────────────────────────────
-    // Space taken by everything EXCEPT the table body:
-    //   tblBandY + 28 (table starts here)
-    //   + headerRow (~20pt)
-    //   + totals: 6 rows × 17pt = 102
-    //   + gap before totals: 6
-    //   + gap before cards: 14
-    //   + cards: 70
-    //   + gap before sig: 8
-    //   + sig block: ~85
-    //   + bottom safe margin: 20
     const TABLE_START   = tblBandY + 28;
-    const AFTER_TABLE   = 20 + 102 + 6 + 14 + 70 + 8 + 85 + 20; // ~325
-    const availH        = pageHeight - TABLE_START - AFTER_TABLE; // space for header+body rows
+    const AFTER_TABLE   = 20 + 102 + 6 + 14 + 70 + 8 + 85 + 20;
+    const availH        = pageHeight - TABLE_START - AFTER_TABLE;
 
-    // Estimate how many visual rows we have (long desc wraps to 2 lines)
-    // Col 1 (Descripción) has cellWidth 'auto' → actual width ≈ CW - 30-52-40-48-70-70 - margins
-    const descColW = CW - 30 - 52 - 40 - 48 - 70 - 70 - 20; // ~202pt usable
+    const descColW = CW - 30 - 52 - 40 - 48 - 70 - 70 - 30 - 20; // Ajustamos para columna descuento
 
-    // Try font sizes from 9 down to 6.5; pick largest that fits
     let chosenFontSize = 9;
     let chosenPad      = 4;
 
     for (let fs = 9; fs >= 6.5; fs -= 0.5) {
       doc.setFontSize(fs);
-      const lineH = fs * 1.15; // approximate line height in pt
+      const lineH = fs * 1.15;
 
-      // Count visual lines per row (description may wrap)
       let totalVisualLines = 0;
       items.forEach(it => {
         const lines = doc.splitTextToSize(it.desc || '', descColW).length;
         totalVisualLines += Math.max(lines, 1);
       });
 
-      // Try padding values from 4 down to 1
       for (let pad = 4; pad >= 1; pad--) {
         const rowH      = lineH + pad * 2;
-        const headerH   = lineH + 6; // header has slightly more padding
+        const headerH   = lineH + 6;
         const bodyH     = totalVisualLines * rowH;
         const totalH    = headerH + bodyH;
         if (totalH <= availH) {
@@ -263,9 +281,7 @@ export async function generatePDF(cotizacion) {
           break;
         }
       }
-      // If we found a fit at this font size, stop
       if ((doc.setFontSize(chosenFontSize), true) && chosenFontSize === fs) {
-        // check the pad found was valid (pad loop didn't exhaust)
         const lineHCheck = fs * 1.15;
         let totalVL = 0;
         items.forEach(it => {
@@ -275,7 +291,7 @@ export async function generatePDF(cotizacion) {
       }
     }
 
-    // ── ITEMS TABLE ───────────────────────────────────────────────
+    // ── ITEMS TABLE (with discount column) ───────────────────────────────────────────────
     const tableData = items.map((it, i) => [
       `1.${i + 1}`,
       it.desc,
@@ -283,12 +299,13 @@ export async function generatePDF(cotizacion) {
       it.unidad,
       it.cant,
       formatNumber(it.precio),
-      formatNumber(it.cant * it.precio),
+      it.descuento || 0,
+      formatNumber(calcularSubtotalItem(it)),
     ]);
 
     autoTable(doc, {
       startY: TABLE_START,
-      head: [['Ítem', 'Descripción', 'Marca', 'Unidad', 'Cantidad', 'Valor Unitario', 'Valor Total']],
+      head: [['Ítem', 'Descripción', 'Marca', 'Unidad', 'Cantidad', 'Valor Unitario', 'Desc. %', 'Valor Total']],
       body: tableData,
       theme: 'grid',
       headStyles: {
@@ -312,7 +329,8 @@ export async function generatePDF(cotizacion) {
         3: { halign: 'center', cellWidth: 40 },
         4: { halign: 'center', cellWidth: 48 },
         5: { halign: 'right',  cellWidth: 70 },
-        6: { halign: 'right',  cellWidth: 70, fontStyle: 'bold' },
+        6: { halign: 'center', cellWidth: 30 },
+        7: { halign: 'right',  cellWidth: 70, fontStyle: 'bold' },
       },
       margin: { left: ML, right: MR },
       tableLineColor: [200, 210, 228],
@@ -322,23 +340,26 @@ export async function generatePDF(cotizacion) {
       },
     });
 
-    // ── TOTALS ────────────────────────────────────────────────────
-    let subtotal = 0;
-    items.forEach(it => (subtotal += it.cant * it.precio));
-    const vAdmin  = subtotal * (porcentajes.admin  / 100);
-    const vImprev = subtotal * (porcentajes.imprev / 100);
-    const vUtil   = subtotal * (porcentajes.util   / 100);
-    const vIva    = vUtil    * (porcentajes.iva    / 100);
-    const total   = subtotal + vAdmin + vImprev + vUtil + vIva;
-
+    // ── TOTALS (updated with discounts and tax type) ────────────────────────────────────────────────────
     const totals = [
       { lbl: 'SUBTOTAL',                               val: subtotal, bold: true,  blue: false },
       { lbl: `Administración ${porcentajes.admin}%`,   val: vAdmin,   bold: false, blue: false },
       { lbl: `Imprevistos ${porcentajes.imprev}%`,     val: vImprev,  bold: false, blue: false },
       { lbl: `Utilidad ${porcentajes.util}%`,          val: vUtil,    bold: false, blue: false },
-      { lbl: `IVA sobre utilidad ${porcentajes.iva}%`, val: vIva,     bold: false, blue: false },
-      { lbl: 'TOTAL',                                  val: total,    bold: true,  blue: true  },
+      { lbl: `${tipoImpuesto} ${porcentajes.iva}%`,    val: vImpuesto, bold: false, blue: false },
     ];
+    
+    if (descuentoTotal > 0) {
+      totals.push({ 
+        lbl: `Descuento ${descuentoTipo === 'porcentaje' ? descuentoTotal + '%' : ''}`, 
+        val: -descuentoTotalValor, 
+        bold: true,  
+        blue: false,
+        isDiscount: true
+      });
+    }
+    
+    totals.push({ lbl: 'TOTAL', val: total, bold: true, blue: true });
 
     const rowH = 17;
     const totW = 248;
@@ -354,13 +375,17 @@ export async function generatePDF(cotizacion) {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(12.5);
       } else {
-        if (i % 2 === 0) {
+        if (i % 2 === 0 && !t.isDiscount) {
           doc.setFillColor(243, 246, 255);
+          doc.rect(totX, ry, totW, rowH, 'F');
+        }
+        if (t.isDiscount) {
+          doc.setFillColor(230, 255, 230);
           doc.rect(totX, ry, totW, rowH, 'F');
         }
         doc.setFont('helvetica', t.bold ? 'bold' : 'normal');
         doc.setFontSize(10);
-        doc.setTextColor(45, 45, 45);
+        doc.setTextColor(t.isDiscount ? 34 : 45, t.isDiscount ? 139 : 45, t.isDiscount ? 34 : 45);
       }
       doc.text(t.lbl, totX + 10, ry + (t.blue ? 15 : 14));
       doc.text(formatNumber(t.val), totX + totW - 10, ry + (t.blue ? 15 : 14), { align: 'right' });
@@ -460,7 +485,7 @@ export async function generatePDF(cotizacion) {
     doc.setTextColor(80, 80, 80);
     doc.text('Director Comercial', sigStartX + 4, sigBaseY + fH + 34);
 
-    // ── THANK-YOU (centred beside signature block) ────────────────
+    // ── THANK-YOU (centered beside signature block) ────────────────
     const sigBlockH = fH + 44;
     const tyX       = pageWidth - MR - 220;
     const tyBlockH  = 32 + 20;

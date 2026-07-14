@@ -115,23 +115,60 @@ function Select({ className = '', children, ...props }) {
 }
 
 // ── TAB: NUEVA COTIZACIÓN ─────────────────────────────────────────────────────
-function NuevaCotizacion({ products, onSave, initialData }) {
+function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber }) {
   const today = new Date().toISOString().split('T')[0];
   const [cliente, setCliente] = useState(initialData?.cliente || { ref: '', atencion: '', correo: '', tel: '' });
-  const [numero, setNumero] = useState(initialData?.numero || '');
+  const [numero, setNumero] = useState(initialData?.numero || lastQuoteNumber + 1);
   const [fecha, setFecha] = useState(initialData?.fecha || today);
   const [porc, setPorc] = useState(initialData?.porc || DEFAULT_PORCENTAJES);
   const [items, setItems] = useState(initialData?.items || []);
-  const [newItem, setNewItem] = useState({ desc: '', marca: '', unidad: 'UND', cant: 1, precio: '' });
+  const [newItem, setNewItem] = useState({ desc: '', marca: '', unidad: 'UND', cant: 1, precio: '', descuento: 0 });
   const [selectedProd, setSelectedProd] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [tipoImpuesto, setTipoImpuesto] = useState(initialData?.tipoImpuesto || 'IVA'); // 'IVA' o 'IU'
+  const [descuentoTotal, setDescuentoTotal] = useState(initialData?.descuentoTotal || 0); // % de descuento total
+  const [descuentoTipo, setDescuentoTipo] = useState(initialData?.descuentoTipo || 'porcentaje'); // 'porcentaje' o 'monto'
+  const [textoIntro, setTextoIntro] = useState(initialData?.textoIntro || 
+    'De acuerdo a su amable solicitud tenemos el gusto de enviarle la siguiente propuesta comercial para su respectivo estudio:');
 
-  const subtotal = items.reduce((s, it) => s + it.cant * it.precio, 0);
+  // Calcular subtotal por ítem incluyendo descuentos por producto
+  const calcularSubtotalItem = (item) => {
+    const totalBruto = item.cant * item.precio;
+    if (item.descuento && item.descuento > 0) {
+      const descuentoValor = (item.descuento / 100) * totalBruto;
+      return totalBruto - descuentoValor;
+    }
+    return totalBruto;
+  };
+
+  const subtotal = items.reduce((s, it) => s + calcularSubtotalItem(it), 0);
   const vAdmin = subtotal * (porc.admin / 100);
   const vImprev = subtotal * (porc.imprev / 100);
   const vUtil = subtotal * (porc.util / 100);
-  const vIva = vUtil * (porc.iva / 100);
-  const total = subtotal + vAdmin + vImprev + vUtil + vIva;
+  
+  // Calcular impuesto (IVA o IU)
+  let vImpuesto;
+  if (tipoImpuesto === 'IVA') {
+    vImpuesto = vUtil * (porc.iva / 100);
+  } else { // IU - Impuesto Unificado
+    vImpuesto = subtotal * (porc.iva / 100); // Usamos el mismo porcentaje pero aplicado al subtotal
+  }
+  
+  // Aplicar descuento total
+  let totalAntesDescuento = subtotal + vAdmin + vImprev + vUtil + vImpuesto;
+  let descuentoTotalValor;
+  
+  if (descuentoTotal > 0) {
+    if (descuentoTipo === 'porcentaje') {
+      descuentoTotalValor = (descuentoTotal / 100) * totalAntesDescuento;
+    } else {
+      descuentoTotalValor = descuentoTotal;
+    }
+  } else {
+    descuentoTotalValor = 0;
+  }
+  
+  const total = totalAntesDescuento - descuentoTotalValor;
 
   function handleProdSelect(e) {
     const idx = e.target.value;
@@ -143,8 +180,14 @@ function NuevaCotizacion({ products, onSave, initialData }) {
 
   function addItem() {
     if (!newItem.desc) return;
-    setItems(prev => [...prev, { id: uid(), ...newItem, cant: Number(newItem.cant) || 1, precio: Number(newItem.precio) || 0 }]);
-    setNewItem({ desc: '', marca: '', unidad: 'UND', cant: 1, precio: '' });
+    setItems(prev => [...prev, { 
+      id: uid(), 
+      ...newItem, 
+      cant: Number(newItem.cant) || 1, 
+      precio: Number(newItem.precio) || 0,
+      descuento: Number(newItem.descuento) || 0
+    }]);
+    setNewItem({ desc: '', marca: '', unidad: 'UND', cant: 1, precio: '', descuento: 0 });
     setSelectedProd('');
   }
 
@@ -153,7 +196,10 @@ function NuevaCotizacion({ products, onSave, initialData }) {
   }
 
   function updateItem(id, field, val) {
-    setItems(prev => prev.map(x => x.id === id ? { ...x, [field]: field === 'cant' || field === 'precio' ? Number(val) : val } : x));
+    setItems(prev => prev.map(x => x.id === id ? { 
+      ...x, 
+      [field]: (field === 'cant' || field === 'precio' || field === 'descuento') ? Number(val) : val 
+    } : x));
   }
 
   function handleSave() {
@@ -165,7 +211,19 @@ function NuevaCotizacion({ products, onSave, initialData }) {
       toast.error('Agrega al menos un ítem'); 
       return; 
     }
-    onSave({ id: uid(), cliente, numero, fecha, porc, items, total });
+    onSave({ 
+      id: uid(), 
+      cliente, 
+      numero, 
+      fecha, 
+      porc, 
+      items, 
+      total, 
+      tipoImpuesto, 
+      descuentoTotal, 
+      descuentoTipo, 
+      textoIntro 
+    });
     toast.success('Cotización guardada ✓');
   }
 
@@ -176,7 +234,17 @@ function NuevaCotizacion({ products, onSave, initialData }) {
     }
     setExporting(true);
     try {
-      await generatePDF({ cliente, numero, fecha, items, porcentajes: porc });
+      await generatePDF({ 
+        cliente, 
+        numero, 
+        fecha, 
+        items, 
+        porcentajes: porc,
+        tipoImpuesto,
+        descuentoTotal,
+        descuentoTipo,
+        textoIntro
+      });
       toast.success('PDF generado exitosamente!');
     } catch (e) {
       toast.error('Error al generar PDF: ' + e.message);
@@ -186,9 +254,14 @@ function NuevaCotizacion({ products, onSave, initialData }) {
 
   function handleClear() {
     setCliente({ ref: '', atencion: '', correo: '', tel: '' });
-    setNumero(''); setFecha(today);
+    setNumero(lastQuoteNumber + 1); 
+    setFecha(today);
     setPorc(DEFAULT_PORCENTAJES);
     setItems([]);
+    setTipoImpuesto('IVA');
+    setDescuentoTotal(0);
+    setDescuentoTipo('porcentaje');
+    setTextoIntro('De acuerdo a su amable solicitud tenemos el gusto de enviarle la siguiente propuesta comercial para su respectivo estudio:');
     toast.success('Formulario limpiado');
   }
 
@@ -225,6 +298,35 @@ function NuevaCotizacion({ products, onSave, initialData }) {
                 <Input type="number" placeholder="Ej: 556" value={numero} onChange={e => setNumero(e.target.value)} />
               </Field>
             </div>
+            
+            {/* Tipo de impuesto */}
+            <div className="grid grid-cols-1 gap-3">
+              <Field label="Tipo de impuesto">
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => setTipoImpuesto('IVA')}
+                    className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all border-2 ${
+                      tipoImpuesto === 'IVA' 
+                        ? 'bg-[#003087] text-white border-[#003087]' 
+                        : 'bg-white text-gray-700 border-gray-200 hover:border-[#003087]'
+                    }`}
+                  >
+                    IVA
+                  </button>
+                  <button 
+                    onClick={() => setTipoImpuesto('IU')}
+                    className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all border-2 ${
+                      tipoImpuesto === 'IU' 
+                        ? 'bg-[#003087] text-white border-[#003087]' 
+                        : 'bg-white text-gray-700 border-gray-200 hover:border-[#003087]'
+                    }`}
+                  >
+                    IU
+                  </button>
+                </div>
+              </Field>
+            </div>
+            
             <div className="bg-[#f8fafc] rounded-lg p-4 border border-gray-100">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Fórmulas de cálculo</p>
               <div className="grid grid-cols-2 gap-3">
@@ -232,13 +334,65 @@ function NuevaCotizacion({ products, onSave, initialData }) {
                   { key: 'admin', label: 'Administración (%)' },
                   { key: 'imprev', label: 'Imprevistos (%)' },
                   { key: 'util', label: 'Utilidad (%)' },
-                  { key: 'iva', label: 'IVA sobre utilidad (%)' },
+                  { key: 'iva', label: `${tipoImpuesto} (%)` },
                 ].map(f => (
                   <Field key={f.key} label={f.label}>
                     <Input type="number" value={porc[f.key]} onChange={e => setPorc(p => ({ ...p, [f.key]: Number(e.target.value) }))} className="text-right" />
                   </Field>
                 ))}
               </div>
+            </div>
+
+            {/* Descuento total */}
+            <div className="bg-[#f8fafc] rounded-lg p-4 border border-gray-100">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Descuento total</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-1">
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setDescuentoTipo('porcentaje')}
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all border-2 ${
+                        descuentoTipo === 'porcentaje' 
+                          ? 'bg-[#003087] text-white border-[#003087]' 
+                          : 'bg-white text-gray-700 border-gray-200'
+                      }`}
+                    >
+                      %
+                    </button>
+                    <button 
+                      onClick={() => setDescuentoTipo('monto')}
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all border-2 ${
+                        descuentoTipo === 'monto' 
+                          ? 'bg-[#003087] text-white border-[#003087]' 
+                          : 'bg-white text-gray-700 border-gray-200'
+                      }`}
+                    >
+                      $
+                    </button>
+                  </div>
+                </div>
+                <Field label={descuentoTipo === 'porcentaje' ? 'Porcentaje' : 'Monto'} className="col-span-1">
+                  <Input 
+                    type="number" 
+                    value={descuentoTotal} 
+                    onChange={e => setDescuentoTotal(Number(e.target.value))} 
+                    className="text-right" 
+                    placeholder="0"
+                  />
+                </Field>
+              </div>
+            </div>
+
+            {/* Texto intro editable */}
+            <div className="bg-[#f8fafc] rounded-lg p-4 border border-gray-100">
+              <Field label="Texto introductorio">
+                <textarea 
+                  value={textoIntro} 
+                  onChange={e => setTextoIntro(e.target.value)} 
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  rows={3}
+                />
+              </Field>
             </div>
           </div>
         </div>
@@ -254,7 +408,7 @@ function NuevaCotizacion({ products, onSave, initialData }) {
           <div className="bg-gray-50 rounded-lg p-4 border border-gray-100 mb-5">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Agregar ítem</p>
             <div className="grid grid-cols-12 gap-3 items-end">
-              <Field label="Del catálogo" className="col-span-3">
+              <Field label="Del catálogo" className="col-span-2">
                 <Select value={selectedProd} onChange={handleProdSelect}>
                   <option value="">— Seleccionar —</option>
                   {products.map((p, i) => (
@@ -262,7 +416,7 @@ function NuevaCotizacion({ products, onSave, initialData }) {
                   ))}
                 </Select>
               </Field>
-              <Field label="Descripción" className="col-span-4">
+              <Field label="Descripción" className="col-span-3">
                 <Input value={newItem.desc} onChange={e => setNewItem(p => ({ ...p, desc: e.target.value }))} placeholder="Descripción del ítem" />
               </Field>
               <Field label="Marca" className="col-span-1">
@@ -278,6 +432,9 @@ function NuevaCotizacion({ products, onSave, initialData }) {
               </Field>
               <Field label="Valor unitario ($)" className="col-span-2">
                 <Input type="number" value={newItem.precio} onChange={e => setNewItem(p => ({ ...p, precio: e.target.value }))} placeholder="0" className="text-right" />
+              </Field>
+              <Field label="Descuento (%)" className="col-span-2">
+                <Input type="number" value={newItem.descuento} onChange={e => setNewItem(p => ({ ...p, descuento: e.target.value }))} placeholder="0" className="text-right" />
               </Field>
             </div>
             <div className="flex justify-end mt-3">
@@ -304,6 +461,7 @@ function NuevaCotizacion({ products, onSave, initialData }) {
                     <th className="px-3 py-2.5 text-center text-xs font-semibold w-16">Und.</th>
                     <th className="px-3 py-2.5 text-center text-xs font-semibold w-20">Cant.</th>
                     <th className="px-3 py-2.5 text-right text-xs font-semibold w-32">Valor unit.</th>
+                    <th className="px-3 py-2.5 text-center text-xs font-semibold w-20">Desc. %</th>
                     <th className="px-3 py-2.5 text-right text-xs font-semibold w-32">Total</th>
                     <th className="w-10"></th>
                   </tr>
@@ -334,7 +492,11 @@ function NuevaCotizacion({ products, onSave, initialData }) {
                         <input type="number" value={it.precio} onChange={e => updateItem(it.id, 'precio', e.target.value)}
                           className="w-full text-sm bg-transparent border-0 focus:outline-none focus:bg-blue-50 rounded px-1 text-right" />
                       </td>
-                      <td className="px-3 py-2 text-right font-medium text-[#003087]">{fmt(it.cant * it.precio)}</td>
+                      <td className="px-3 py-2">
+                        <input type="number" value={it.descuento || 0} onChange={e => updateItem(it.id, 'descuento', e.target.value)}
+                          className="w-full text-sm bg-transparent border-0 focus:outline-none focus:bg-blue-50 rounded px-1 text-center" />
+                      </td>
+                      <td className="px-3 py-2 text-right font-medium text-[#003087]">{fmt(calcularSubtotalItem(it))}</td>
                       <td className="px-2 py-2">
                         <button onClick={() => removeItem(it.id)} className="text-red-400 hover:text-red-600 transition-colors">
                           <X size={14} />
@@ -351,18 +513,32 @@ function NuevaCotizacion({ products, onSave, initialData }) {
           {items.length > 0 && (
             <div className="flex justify-end mt-6">
               <div className="w-80 space-y-1">
-                {[
-                  ['SUBTOTAL', subtotal, false],
-                  [`Administración ${porc.admin}%`, vAdmin, false],
-                  [`Imprevistos ${porc.imprev}%`, vImprev, false],
-                  [`Utilidad ${porc.util}%`, vUtil, false],
-                  [`IVA sobre utilidad ${porc.iva}%`, vIva, false],
-                ].map(([label, val]) => (
-                  <div key={label} className="flex justify-between text-sm py-1 border-b border-gray-100">
-                    <span className="text-gray-600">{label}</span>
-                    <span className="font-medium">{fmt(val)}</span>
+                <div className="flex justify-between text-sm py-1 border-b border-gray-100">
+                  <span className="text-gray-600">SUBTOTAL</span>
+                  <span className="font-medium">{fmt(subtotal)}</span>
+                </div>
+                <div className="flex justify-between text-sm py-1 border-b border-gray-100">
+                  <span className="text-gray-600">{`Administración ${porc.admin}%`}</span>
+                  <span className="font-medium">{fmt(vAdmin)}</span>
+                </div>
+                <div className="flex justify-between text-sm py-1 border-b border-gray-100">
+                  <span className="text-gray-600">{`Imprevistos ${porc.imprev}%`}</span>
+                  <span className="font-medium">{fmt(vImprev)}</span>
+                </div>
+                <div className="flex justify-between text-sm py-1 border-b border-gray-100">
+                  <span className="text-gray-600">{`Utilidad ${porc.util}%`}</span>
+                  <span className="font-medium">{fmt(vUtil)}</span>
+                </div>
+                <div className="flex justify-between text-sm py-1 border-b border-gray-100">
+                  <span className="text-gray-600">{`${tipoImpuesto} ${porc.iva}%`}</span>
+                  <span className="font-medium">{fmt(vImpuesto)}</span>
+                </div>
+                {descuentoTotal > 0 && (
+                  <div className="flex justify-between text-sm py-1 border-b border-gray-100 text-green-600">
+                    <span className="font-medium">{`Descuento ${descuentoTipo === 'porcentaje' ? descuentoTotal + '%' : ''}`}</span>
+                    <span className="font-medium">-{fmt(descuentoTotalValor)}</span>
                   </div>
-                ))}
+                )}
                 <div className="flex justify-between items-center bg-[#003087] text-white px-3 py-2.5 rounded-lg mt-2">
                   <span className="font-bold text-sm">TOTAL</span>
                   <span className="font-bold text-base">{fmt(total)}</span>
@@ -588,9 +764,14 @@ export default function App() {
   const [products, setProducts] = useState(SAMPLE_PRODUCTS);
   const [cotizaciones, setCotizaciones] = useState([]);
   const [loadedCotiz, setLoadedCotiz] = useState(null);
+  const [lastQuoteNumber, setLastQuoteNumber] = useState(570); // Empezamos en 570
 
   function handleSave(c) {
     setCotizaciones(prev => [c, ...prev]);
+    // Actualizar el último número de cotización si el actual es mayor
+    if (c.numero > lastQuoteNumber) {
+      setLastQuoteNumber(c.numero);
+    }
   }
 
   function handleLoad(c) {
@@ -607,6 +788,7 @@ export default function App() {
           products={products}
           onSave={handleSave}
           initialData={loadedCotiz}
+          lastQuoteNumber={lastQuoteNumber}
         />
       )}
       {tab === 'guardadas' && (
