@@ -1,7 +1,7 @@
 -- Tabla para clientes
 CREATE TABLE IF NOT EXISTS clients (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  ref TEXT NOT NULL, -- Nombre del cliente
+  ref TEXT NOT NULL,
   atencion TEXT,
   correo TEXT,
   tel TEXT,
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS quotes (
 CREATE TABLE IF NOT EXISTS quote_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   quote_id UUID NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
-  desc TEXT NOT NULL,
+  "desc" TEXT NOT NULL,
   marca TEXT,
   unidad TEXT DEFAULT 'UND',
   cant INTEGER NOT NULL DEFAULT 1,
@@ -45,14 +45,33 @@ CREATE TABLE IF NOT EXISTS quote_items (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Habilitar Row Level Security (RLS) y permitir acceso público para desarrollo (solo para pruebas!)
+-- Habilitar Row Level Security
 ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE quotes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE quote_items ENABLE ROW LEVEL SECURITY;
 
--- Políticas públicas para desarrollo (se puede restringir más tarde con autenticación)
-CREATE POLICY "Allow public access to clients" ON clients FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow public access to products" ON products FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow public access to quotes" ON quotes FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow public access to quote_items" ON quote_items FOR ALL USING (true) WITH CHECK (true);
+-- Políticas públicas para desarrollo
+CREATE POLICY "Allow public access to clients"
+ON clients
+FOR ALL
+USING (true)
+WITH CHECK (true);
+
+CREATE POLICY "Allow public access to products"
+ON products
+FOR ALL
+USING (true)
+WITH CHECK (true);
+
+CREATE POLICY "Allow public access to quotes"
+ON quotes
+FOR ALL
+USING (true)
+WITH CHECK (true);
+
+CREATE POLICY "Allow public access to quote_items"
+ON quote_items
+FOR ALL
+USING (true)
+WITH CHECK (true);
