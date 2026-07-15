@@ -351,7 +351,7 @@ export async function generatePDF(cotizacion) {
       totals.push({ lbl: `Utilidad ${porcentajes.util}%`,          val: vUtil,    bold: false, blue: false });
     }
     
-    totals.push({ lbl: `${tipoImpuesto} ${porcentajes.iva}%`,    val: vImpuesto, bold: false, blue: false });
+    totals.push({ lbl: `${tipoImpuesto === 'AIU' ? 'IVA sobre utilidad' : 'IVA'} ${porcentajes.iva}%`,    val: vImpuesto, bold: false, blue: false });
     totals.push({ lbl: 'TOTAL', val: total, bold: true, blue: true });
 
     const rowH = 17;

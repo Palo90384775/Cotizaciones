@@ -353,10 +353,15 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clien
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Fórmulas de cálculo</p>
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { key: 'admin', label: 'Administración (%)' },
-                  { key: 'imprev', label: 'Imprevistos (%)' },
-                  { key: 'util', label: 'Utilidad (%)' },
-                  { key: 'iva', label: `${tipoImpuesto} (%)` },
+                  ...(tipoImpuesto === 'AIU' ? [
+                    { key: 'admin', label: 'Administración (%)' },
+                    { key: 'imprev', label: 'Imprevistos (%)' },
+                    { key: 'util', label: 'Utilidad (%)' }
+                  ] : []),
+                  { 
+                    key: 'iva', 
+                    label: tipoImpuesto === 'AIU' ? 'IVA sobre utilidad (%)' : 'IVA (%)' 
+                  }
                 ].map(f => (
                   <Field key={f.key} label={f.label}>
                     <Input type="number" value={porc[f.key]} onChange={e => setPorc(p => ({ ...p, [f.key]: Number(e.target.value) }))} className="text-right" />
@@ -556,7 +561,7 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clien
                   </>
                 )}
                 <div className="flex justify-between text-sm py-1 border-b border-gray-100">
-                  <span className="text-gray-600">{`${tipoImpuesto} ${porc.iva}%`}</span>
+                  <span className="text-gray-600">{`${tipoImpuesto === 'AIU' ? 'IVA sobre utilidad' : 'IVA'} ${porc.iva}%`}</span>
                   <span className="font-medium">{fmt(vImpuesto)}</span>
                 </div>
                 <div className="flex justify-between items-center bg-[#003087] text-white px-3 py-2.5 rounded-lg mt-2">
