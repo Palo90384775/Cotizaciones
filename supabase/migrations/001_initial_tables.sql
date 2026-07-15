@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS quotes (
   numero INTEGER NOT NULL UNIQUE,
   fecha DATE NOT NULL,
   cliente JSONB NOT NULL,
-  porcentajes JSONB NOT NULL,
+  porcentajes JSONB,
   tipo_impuesto TEXT NOT NULL DEFAULT 'IVA',
   descuento_total NUMERIC DEFAULT 0,
   descuento_tipo TEXT DEFAULT 'porcentaje',
