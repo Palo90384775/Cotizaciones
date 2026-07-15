@@ -25,15 +25,15 @@ export async function generatePDF(cotizacion) {
   };
 
   const subtotal = items.reduce((s, it) => s + calcularSubtotalItem(it), 0);
-  const vAdmin  = subtotal * (porcentajes.admin  / 100);
-  const vImprev = subtotal * (porcentajes.imprev / 100);
-  const vUtil   = subtotal * (porcentajes.util   / 100);
+  const vAdmin  = tipoImpuesto === 'AIU' ? subtotal * (porcentajes.admin  / 100) : 0;
+  const vImprev = tipoImpuesto === 'AIU' ? subtotal * (porcentajes.imprev / 100) : 0;
+  const vUtil   = tipoImpuesto === 'AIU' ? subtotal * (porcentajes.util   / 100) : 0;
   
   let vImpuesto;
   if (tipoImpuesto === 'IVA') {
-    vImpuesto = vUtil * (porcentajes.iva / 100);
-  } else { // IU
     vImpuesto = subtotal * (porcentajes.iva / 100);
+  } else { // AIU
+    vImpuesto = vUtil * (porcentajes.iva / 100);
   }
 
   let totalAntesDescuento = subtotal + vAdmin + vImprev + vUtil + vImpuesto;
@@ -343,22 +343,15 @@ export async function generatePDF(cotizacion) {
     // ── TOTALS (updated with discounts and tax type) ────────────────────────────────────────────────────
     const totals = [
       { lbl: 'SUBTOTAL',                               val: subtotal, bold: true,  blue: false },
-      { lbl: `Administración ${porcentajes.admin}%`,   val: vAdmin,   bold: false, blue: false },
-      { lbl: `Imprevistos ${porcentajes.imprev}%`,     val: vImprev,  bold: false, blue: false },
-      { lbl: `Utilidad ${porcentajes.util}%`,          val: vUtil,    bold: false, blue: false },
-      { lbl: `${tipoImpuesto} ${porcentajes.iva}%`,    val: vImpuesto, bold: false, blue: false },
     ];
     
-    if (descuentoTotal > 0) {
-      totals.push({ 
-        lbl: `Descuento ${descuentoTipo === 'porcentaje' ? descuentoTotal + '%' : ''}`, 
-        val: -descuentoTotalValor, 
-        bold: true,  
-        blue: false,
-        isDiscount: true
-      });
+    if (tipoImpuesto === 'AIU') {
+      totals.push({ lbl: `Administración ${porcentajes.admin}%`,   val: vAdmin,   bold: false, blue: false });
+      totals.push({ lbl: `Imprevistos ${porcentajes.imprev}%`,     val: vImprev,  bold: false, blue: false });
+      totals.push({ lbl: `Utilidad ${porcentajes.util}%`,          val: vUtil,    bold: false, blue: false });
     }
     
+    totals.push({ lbl: `${tipoImpuesto} ${porcentajes.iva}%`,    val: vImpuesto, bold: false, blue: false });
     totals.push({ lbl: 'TOTAL', val: total, bold: true, blue: true });
 
     const rowH = 17;
@@ -375,17 +368,13 @@ export async function generatePDF(cotizacion) {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(12.5);
       } else {
-        if (i % 2 === 0 && !t.isDiscount) {
+        if (i % 2 === 0) {
           doc.setFillColor(243, 246, 255);
-          doc.rect(totX, ry, totW, rowH, 'F');
-        }
-        if (t.isDiscount) {
-          doc.setFillColor(230, 255, 230);
           doc.rect(totX, ry, totW, rowH, 'F');
         }
         doc.setFont('helvetica', t.bold ? 'bold' : 'normal');
         doc.setFontSize(10);
-        doc.setTextColor(t.isDiscount ? 34 : 45, t.isDiscount ? 139 : 45, t.isDiscount ? 34 : 45);
+        doc.setTextColor(45, 45, 45);
       }
       doc.text(t.lbl, totX + 10, ry + (t.blue ? 15 : 14));
       doc.text(formatNumber(t.val), totX + totW - 10, ry + (t.blue ? 15 : 14), { align: 'right' });

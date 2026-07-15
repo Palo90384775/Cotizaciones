@@ -48,6 +48,7 @@ function Header({ tab, setTab }) {
   const tabs = [
     { id: 'nueva', label: 'Nueva cotización', icon: FileText },
     { id: 'guardadas', label: 'Guardadas', icon: Folder },
+    { id: 'clientes', label: 'Mis clientes', icon: Package }, // Reutilizamos icon por ahora
     { id: 'productos', label: 'Mis productos', icon: Package },
   ];
   return (
@@ -115,7 +116,7 @@ function Select({ className = '', children, ...props }) {
 }
 
 // ── TAB: NUEVA COTIZACIÓN ─────────────────────────────────────────────────────
-function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber }) {
+function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clients }) {
   const today = new Date().toISOString().split('T')[0];
   const [cliente, setCliente] = useState(initialData?.cliente || { ref: '', atencion: '', correo: '', tel: '' });
   const [numero, setNumero] = useState(initialData?.numero || lastQuoteNumber + 1);
@@ -125,7 +126,7 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber }) {
   const [newItem, setNewItem] = useState({ desc: '', marca: '', unidad: 'UND', cant: 1, precio: '', descuento: 0 });
   const [selectedProd, setSelectedProd] = useState('');
   const [exporting, setExporting] = useState(false);
-  const [tipoImpuesto, setTipoImpuesto] = useState(initialData?.tipoImpuesto || 'IVA'); // 'IVA' o 'IU'
+  const [tipoImpuesto, setTipoImpuesto] = useState(initialData?.tipoImpuesto || 'IVA'); // 'IVA' o 'AIU'
   const [descuentoTotal, setDescuentoTotal] = useState(initialData?.descuentoTotal || 0); // % de descuento total
   const [descuentoTipo, setDescuentoTipo] = useState(initialData?.descuentoTipo || 'porcentaje'); // 'porcentaje' o 'monto'
   const [textoIntro, setTextoIntro] = useState(initialData?.textoIntro || 
@@ -142,16 +143,16 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber }) {
   };
 
   const subtotal = items.reduce((s, it) => s + calcularSubtotalItem(it), 0);
-  const vAdmin = subtotal * (porc.admin / 100);
-  const vImprev = subtotal * (porc.imprev / 100);
-  const vUtil = subtotal * (porc.util / 100);
+  const vAdmin = tipoImpuesto === 'AIU' ? subtotal * (porc.admin / 100) : 0;
+  const vImprev = tipoImpuesto === 'AIU' ? subtotal * (porc.imprev / 100) : 0;
+  const vUtil = tipoImpuesto === 'AIU' ? subtotal * (porc.util / 100) : 0;
   
-  // Calcular impuesto (IVA o IU)
+  // Calcular impuesto (IVA o AIU)
   let vImpuesto;
   if (tipoImpuesto === 'IVA') {
+    vImpuesto = subtotal * (porc.iva / 100);
+  } else { // AIU
     vImpuesto = vUtil * (porc.iva / 100);
-  } else { // IU - Impuesto Unificado
-    vImpuesto = subtotal * (porc.iva / 100); // Usamos el mismo porcentaje pero aplicado al subtotal
   }
   
   // Aplicar descuento total
@@ -275,6 +276,27 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber }) {
         <div className="p-6 grid grid-cols-2 gap-8">
           {/* Cliente */}
           <div className="space-y-4">
+            {clients.length > 0 && (
+              <Field label="Seleccionar cliente existente">
+                <Select 
+                  value="" 
+                  onChange={(e) => {
+                    const selectedId = e.target.value;
+                    if (selectedId) {
+                      const client = clients.find(c => c.id === selectedId);
+                      if (client) {
+                        setCliente(client);
+                      }
+                    }
+                  }}
+                >
+                  <option value="">— Seleccionar cliente —</option>
+                  {clients.map(c => (
+                    <option key={c.id} value={c.id}>{c.ref}</option>
+                  ))}
+                </Select>
+              </Field>
+            )}
             <Field label="Ref. / Proyecto">
               <Input placeholder="Ej: COTIZ. VILLAVICENCIO" value={cliente.ref} onChange={e => setCliente(p => ({ ...p, ref: e.target.value }))} />
             </Field>
@@ -314,14 +336,14 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber }) {
                     IVA
                   </button>
                   <button 
-                    onClick={() => setTipoImpuesto('IU')}
+                    onClick={() => setTipoImpuesto('AIU')}
                     className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all border-2 ${
-                      tipoImpuesto === 'IU' 
+                      tipoImpuesto === 'AIU' 
                         ? 'bg-[#003087] text-white border-[#003087]' 
                         : 'bg-white text-gray-700 border-gray-200 hover:border-[#003087]'
                     }`}
                   >
-                    IU
+                    AIU
                   </button>
                 </div>
               </Field>
@@ -517,28 +539,26 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber }) {
                   <span className="text-gray-600">SUBTOTAL</span>
                   <span className="font-medium">{fmt(subtotal)}</span>
                 </div>
-                <div className="flex justify-between text-sm py-1 border-b border-gray-100">
-                  <span className="text-gray-600">{`Administración ${porc.admin}%`}</span>
-                  <span className="font-medium">{fmt(vAdmin)}</span>
-                </div>
-                <div className="flex justify-between text-sm py-1 border-b border-gray-100">
-                  <span className="text-gray-600">{`Imprevistos ${porc.imprev}%`}</span>
-                  <span className="font-medium">{fmt(vImprev)}</span>
-                </div>
-                <div className="flex justify-between text-sm py-1 border-b border-gray-100">
-                  <span className="text-gray-600">{`Utilidad ${porc.util}%`}</span>
-                  <span className="font-medium">{fmt(vUtil)}</span>
-                </div>
+                {tipoImpuesto === 'AIU' && (
+                  <>
+                    <div className="flex justify-between text-sm py-1 border-b border-gray-100">
+                      <span className="text-gray-600">{`Administración ${porc.admin}%`}</span>
+                      <span className="font-medium">{fmt(vAdmin)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm py-1 border-b border-gray-100">
+                      <span className="text-gray-600">{`Imprevistos ${porc.imprev}%`}</span>
+                      <span className="font-medium">{fmt(vImprev)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm py-1 border-b border-gray-100">
+                      <span className="text-gray-600">{`Utilidad ${porc.util}%`}</span>
+                      <span className="font-medium">{fmt(vUtil)}</span>
+                    </div>
+                  </>
+                )}
                 <div className="flex justify-between text-sm py-1 border-b border-gray-100">
                   <span className="text-gray-600">{`${tipoImpuesto} ${porc.iva}%`}</span>
                   <span className="font-medium">{fmt(vImpuesto)}</span>
                 </div>
-                {descuentoTotal > 0 && (
-                  <div className="flex justify-between text-sm py-1 border-b border-gray-100 text-green-600">
-                    <span className="font-medium">{`Descuento ${descuentoTipo === 'porcentaje' ? descuentoTotal + '%' : ''}`}</span>
-                    <span className="font-medium">-{fmt(descuentoTotalValor)}</span>
-                  </div>
-                )}
                 <div className="flex justify-between items-center bg-[#003087] text-white px-3 py-2.5 rounded-lg mt-2">
                   <span className="font-bold text-sm">TOTAL</span>
                   <span className="font-bold text-base">{fmt(total)}</span>
@@ -758,13 +778,135 @@ function Productos({ products, setProducts }) {
   );
 }
 
+// ── TAB: CLIENTES ─────────────────────────────────────────────────────────────
+function Clientes({ clients, setClients, onSelectClient }) {
+  const blank = { ref: '', atencion: '', correo: '', tel: '' };
+  const [form, setForm] = useState(blank);
+  const [editing, setEditing] = useState(null);
+
+  function handleSave() {
+    if (!form.ref) { 
+      toast.error('Ingresa la referencia del cliente'); 
+      return; 
+    }
+    const client = { ...form, id: editing !== null ? clients[editing].id : uid() };
+    if (editing !== null) {
+      setClients(prev => prev.map((c, i) => i === editing ? client : c));
+      setEditing(null);
+      toast.success('Cliente actualizado!');
+    } else {
+      setClients(prev => [...prev, client]);
+      toast.success('Cliente agregado!');
+    }
+    setForm(blank);
+  }
+
+  function startEdit(i) {
+    setEditing(i);
+    setForm({ ...clients[i] });
+  }
+
+  function cancelEdit() {
+    setEditing(null);
+    setForm(blank);
+  }
+
+  return (
+    <div className="max-w-6xl mx-auto px-6 py-6 space-y-5">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-all duration-200">
+        <div className="bg-[#003087] px-6 py-3">
+          <span className="text-white font-semibold text-sm tracking-wide">
+            {editing !== null ? 'EDITAR CLIENTE' : 'AGREGAR CLIENTE'}
+          </span>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <Field label="Referencia/Proyecto">
+              <Input value={form.ref} onChange={e => setForm(p => ({ ...p, ref: e.target.value }))} placeholder="Ej: Cliente ABC" />
+            </Field>
+            <Field label="Atención">
+              <Input value={form.atencion} onChange={e => setForm(p => ({ ...p, atencion: e.target.value }))} placeholder="Nombre del contacto" />
+            </Field>
+            <Field label="Correo">
+              <Input value={form.correo} onChange={e => setForm(p => ({ ...p, correo: e.target.value }))} placeholder="correo@empresa.com" />
+            </Field>
+            <Field label="Teléfono">
+              <Input value={form.tel} onChange={e => setForm(p => ({ ...p, tel: e.target.value }))} placeholder="Teléfono" />
+            </Field>
+          </div>
+          <div className="flex gap-2">
+            {editing !== null && (
+              <button onClick={cancelEdit} className="flex items-center gap-2 border border-gray-200 px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+                <X size={14} /> Cancelar
+              </button>
+            )}
+            <button onClick={handleSave} className="flex items-center gap-2 bg-[#003087] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#002070] transition-colors">
+              {editing !== null ? <><Check size={14} /> Guardar cambios</> : <><Plus size={14} /> Agregar cliente</>}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {clients.length === 0 ? (
+        <div className="text-center py-20 text-gray-400">
+          <Package size={48} className="mx-auto mb-4 opacity-30" />
+          <p className="text-sm">Sin clientes. Agrega el primero.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3">
+          {clients.map((c, i) => (
+            <div key={c.id} className="bg-white rounded-xl border border-gray-200 p-4 flex justify-between items-center shadow-sm hover:shadow-md transition-all duration-200">
+              <div className="min-w-0 mr-3">
+                <p className="font-medium text-sm text-gray-900 truncate">{c.ref}</p>
+                {c.atencion && <p className="text-xs text-gray-400 mt-0.5">👤 {c.atencion}</p>}
+                {c.correo && <p className="text-xs text-gray-400">📧 {c.correo}</p>}
+                {c.tel && <p className="text-xs text-gray-400">📞 {c.tel}</p>}
+              </div>
+              <div className="flex gap-1.5 shrink-0">
+                {onSelectClient && (
+                  <button onClick={() => onSelectClient(c)} className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-500">
+                    <Copy size={13} />
+                  </button>
+                )}
+                <button onClick={() => startEdit(i)} className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-500">
+                  <Pencil size={13} />
+                </button>
+                <button onClick={async () => { 
+                  const result = await Swal.fire({
+                    title: '¿Eliminar cliente?',
+                    text: c.ref,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#003087',
+                    cancelButtonColor: '#e53e3e',
+                    confirmButtonText: 'Sí, eliminar',
+                    cancelButtonText: 'Cancelar',
+                  });
+                  if (result.isConfirmed) {
+                    setClients(prev => prev.filter((_,j)=>j!==i));
+                    toast.success('Cliente eliminado');
+                  }
+                }}
+                  className="p-1.5 border border-red-200 rounded-lg hover:bg-red-50 transition-colors text-red-400">
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── APP ROOT ──────────────────────────────────────────────────────────────────
 export default function App() {
   const [tab, setTab] = useState('nueva');
   const [products, setProducts] = useState(SAMPLE_PRODUCTS);
   const [cotizaciones, setCotizaciones] = useState([]);
   const [loadedCotiz, setLoadedCotiz] = useState(null);
-  const [lastQuoteNumber, setLastQuoteNumber] = useState(570); // Empezamos en 570
+  const [lastQuoteNumber, setLastQuoteNumber] = useState(569); // Empezamos en 569
+  const [clients, setClients] = useState([]); // Estado para guardar clientes
 
   function handleSave(c) {
     setCotizaciones(prev => [c, ...prev]);
@@ -789,10 +931,14 @@ export default function App() {
           onSave={handleSave}
           initialData={loadedCotiz}
           lastQuoteNumber={lastQuoteNumber}
+          clients={clients}
         />
       )}
       {tab === 'guardadas' && (
         <Guardadas cotizaciones={cotizaciones} onDelete={id => setCotizaciones(prev => prev.filter(x => x.id !== id))} onLoad={handleLoad} />
+      )}
+      {tab === 'clientes' && (
+        <Clientes clients={clients} setClients={setClients} />
       )}
       {tab === 'productos' && (
         <Productos products={products} setProducts={setProducts} />
