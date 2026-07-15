@@ -791,7 +791,7 @@ function Clientes({ clients, setClients, onSelectClient }) {
 
   function handleSave() {
     if (!form.ref) { 
-      toast.error('Ingresa la referencia del cliente'); 
+      toast.error('Ingresa el nombre del cliente'); 
       return; 
     }
     const client = { ...form, id: editing !== null ? clients[editing].id : uid() };
@@ -826,7 +826,7 @@ function Clientes({ clients, setClients, onSelectClient }) {
         </div>
         <div className="p-6">
           <div className="grid grid-cols-2 gap-4 mb-4">
-            <Field label="Referencia/Proyecto">
+            <Field label="Nombre del cliente">
               <Input value={form.ref} onChange={e => setForm(p => ({ ...p, ref: e.target.value }))} placeholder="Ej: Cliente ABC" />
             </Field>
             <Field label="Atención">
@@ -907,11 +907,46 @@ function Clientes({ clients, setClients, onSelectClient }) {
 // ── APP ROOT ──────────────────────────────────────────────────────────────────
 export default function App() {
   const [tab, setTab] = useState('nueva');
-  const [products, setProducts] = useState(SAMPLE_PRODUCTS);
-  const [cotizaciones, setCotizaciones] = useState([]);
+  
+  // Cargar datos iniciales de localStorage
+  const [products, setProducts] = useState(() => {
+    const saved = localStorage.getItem('cotizador_products');
+    return saved ? JSON.parse(saved) : SAMPLE_PRODUCTS;
+  });
+  
+  const [cotizaciones, setCotizaciones] = useState(() => {
+    const saved = localStorage.getItem('cotizador_cotizaciones');
+    return saved ? JSON.parse(saved) : [];
+  });
+  
   const [loadedCotiz, setLoadedCotiz] = useState(null);
-  const [lastQuoteNumber, setLastQuoteNumber] = useState(569); // Empezamos en 569
-  const [clients, setClients] = useState([]); // Estado para guardar clientes
+  
+  const [lastQuoteNumber, setLastQuoteNumber] = useState(() => {
+    const saved = localStorage.getItem('cotizador_lastQuote');
+    return saved ? parseInt(saved, 10) : 569; // Empezamos en 569
+  });
+  
+  const [clients, setClients] = useState(() => {
+    const saved = localStorage.getItem('cotizador_clients');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Guardar datos en localStorage cuando cambien
+  React.useEffect(() => {
+    localStorage.setItem('cotizador_products', JSON.stringify(products));
+  }, [products]);
+
+  React.useEffect(() => {
+    localStorage.setItem('cotizador_cotizaciones', JSON.stringify(cotizaciones));
+  }, [cotizaciones]);
+
+  React.useEffect(() => {
+    localStorage.setItem('cotizador_lastQuote', JSON.stringify(lastQuoteNumber));
+  }, [lastQuoteNumber]);
+
+  React.useEffect(() => {
+    localStorage.setItem('cotizador_clients', JSON.stringify(clients));
+  }, [clients]);
 
   function handleSave(c) {
     setCotizaciones(prev => [c, ...prev]);
