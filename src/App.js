@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FileText, Folder, Package, Plus, Trash2, Pencil, Download, X, Check, Copy } from 'lucide-react';
 import { generatePDF } from './generatePDF';
 import Swal from 'sweetalert2';
+import { supabase } from './supabase';
 
 // Toast helper using SweetAlert2 (bottom-right, no overlap with header)
 const toast = {
@@ -664,31 +665,25 @@ function Guardadas({ cotizaciones, onDelete, onLoad }) {
 }
 
 // ── TAB: PRODUCTOS ─────────────────────────────────────────────────────────────
-function Productos({ products, setProducts }) {
+function Productos({ products, onSave, onDelete }) {
   const blank = { nombre: '', marca: '', unidad: 'UND', precio: '', cat: '' };
   const [form, setForm] = useState(blank);
   const [editing, setEditing] = useState(null);
 
-  function handleSave() {
+  async function handleSave() {
     if (!form.nombre) { 
       toast.error('Ingresa el nombre del producto'); 
       return; 
     }
-    const prod = { ...form, precio: Number(form.precio) || 0, id: editing !== null ? products[editing].id : uid() };
-    if (editing !== null) {
-      setProducts(prev => prev.map((p, i) => i === editing ? prod : p));
-      setEditing(null);
-      toast.success('Producto actualizado!');
-    } else {
-      setProducts(prev => [...prev, prod]);
-      toast.success('Producto agregado!');
-    }
+    const prod = { ...form, precio: Number(form.precio) || 0, id: editing !== null ? editing.id : undefined };
+    await onSave(prod);
+    setEditing(null);
     setForm(blank);
   }
 
-  function startEdit(i) {
-    setEditing(i);
-    setForm({ ...products[i] });
+  function startEdit(product) {
+    setEditing(product);
+    setForm({ ...product });
   }
 
   function cancelEdit() {
@@ -752,7 +747,7 @@ function Productos({ products, setProducts }) {
                 <p className="text-sm font-semibold text-[#003087] mt-1">{fmt(p.precio)}</p>
               </div>
               <div className="flex gap-1.5 shrink-0">
-                <button onClick={() => startEdit(i)} className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-500">
+                <button onClick={() => startEdit(p)} className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-500">
                   <Pencil size={13} />
                 </button>
                 <button onClick={async () => { 
@@ -767,8 +762,7 @@ function Productos({ products, setProducts }) {
                     cancelButtonText: 'Cancelar',
                   });
                   if (result.isConfirmed) {
-                    setProducts(prev => prev.filter((_,j)=>j!==i));
-                    toast.success('Producto eliminado');
+                    await onDelete(p.id);
                   }
                 }}
                   className="p-1.5 border border-red-200 rounded-lg hover:bg-red-50 transition-colors text-red-400">
@@ -784,31 +778,25 @@ function Productos({ products, setProducts }) {
 }
 
 // ── TAB: CLIENTES ─────────────────────────────────────────────────────────────
-function Clientes({ clients, setClients, onSelectClient }) {
+function Clientes({ clients, onSave, onDelete }) {
   const blank = { ref: '', atencion: '', correo: '', tel: '' };
   const [form, setForm] = useState(blank);
   const [editing, setEditing] = useState(null);
 
-  function handleSave() {
+  async function handleSave() {
     if (!form.ref) { 
       toast.error('Ingresa el nombre del cliente'); 
       return; 
     }
-    const client = { ...form, id: editing !== null ? clients[editing].id : uid() };
-    if (editing !== null) {
-      setClients(prev => prev.map((c, i) => i === editing ? client : c));
-      setEditing(null);
-      toast.success('Cliente actualizado!');
-    } else {
-      setClients(prev => [...prev, client]);
-      toast.success('Cliente agregado!');
-    }
+    const client = { ...form, id: editing !== null ? editing.id : undefined };
+    await onSave(client);
+    setEditing(null);
     setForm(blank);
   }
 
-  function startEdit(i) {
-    setEditing(i);
-    setForm({ ...clients[i] });
+  function startEdit(client) {
+    setEditing(client);
+    setForm({ ...client });
   }
 
   function cancelEdit() {
@@ -868,12 +856,7 @@ function Clientes({ clients, setClients, onSelectClient }) {
                 {c.tel && <p className="text-xs text-gray-400">📞 {c.tel}</p>}
               </div>
               <div className="flex gap-1.5 shrink-0">
-                {onSelectClient && (
-                  <button onClick={() => onSelectClient(c)} className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-500">
-                    <Copy size={13} />
-                  </button>
-                )}
-                <button onClick={() => startEdit(i)} className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-500">
+                <button onClick={() => startEdit(c)} className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-500">
                   <Pencil size={13} />
                 </button>
                 <button onClick={async () => { 
@@ -888,8 +871,7 @@ function Clientes({ clients, setClients, onSelectClient }) {
                     cancelButtonText: 'Cancelar',
                   });
                   if (result.isConfirmed) {
-                    setClients(prev => prev.filter((_,j)=>j!==i));
-                    toast.success('Cliente eliminado');
+                    await onDelete(c.id);
                   }
                 }}
                   className="p-1.5 border border-red-200 rounded-lg hover:bg-red-50 transition-colors text-red-400">
@@ -908,57 +890,233 @@ function Clientes({ clients, setClients, onSelectClient }) {
 export default function App() {
   const [tab, setTab] = useState('nueva');
   
-  // Cargar datos iniciales de localStorage
-  const [products, setProducts] = useState(() => {
-    const saved = localStorage.getItem('cotizador_products');
-    return saved ? JSON.parse(saved) : SAMPLE_PRODUCTS;
-  });
-  
-  const [cotizaciones, setCotizaciones] = useState(() => {
-    const saved = localStorage.getItem('cotizador_cotizaciones');
-    return saved ? JSON.parse(saved) : [];
-  });
-  
+  const [products, setProducts] = useState([]);
+  const [cotizaciones, setCotizaciones] = useState([]);
   const [loadedCotiz, setLoadedCotiz] = useState(null);
-  
-  const [lastQuoteNumber, setLastQuoteNumber] = useState(() => {
-    const saved = localStorage.getItem('cotizador_lastQuote');
-    return saved ? parseInt(saved, 10) : 569; // Empezamos en 569
-  });
-  
-  const [clients, setClients] = useState(() => {
-    const saved = localStorage.getItem('cotizador_clients');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [lastQuoteNumber, setLastQuoteNumber] = useState(569);
+  const [clients, setClients] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Guardar datos en localStorage cuando cambien
-  React.useEffect(() => {
-    localStorage.setItem('cotizador_products', JSON.stringify(products));
-  }, [products]);
+  // Cargar datos iniciales de Supabase
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      
+      // Cargar productos
+      const { data: productsData, error: productsError } = await supabase
+        .from('products')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (productsError) console.error('Error cargando productos:', productsError);
+      else setProducts(productsData.length > 0 ? productsData : SAMPLE_PRODUCTS);
 
-  React.useEffect(() => {
-    localStorage.setItem('cotizador_cotizaciones', JSON.stringify(cotizaciones));
-  }, [cotizaciones]);
+      // Cargar clientes
+      const { data: clientsData, error: clientsError } = await supabase
+        .from('clients')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (clientsError) console.error('Error cargando clientes:', clientsError);
+      else setClients(clientsData);
 
-  React.useEffect(() => {
-    localStorage.setItem('cotizador_lastQuote', JSON.stringify(lastQuoteNumber));
-  }, [lastQuoteNumber]);
+      // Cargar cotizaciones y último número
+      const { data: quotesData, error: quotesError } = await supabase
+        .from('quotes')
+        .select('*, quote_items(*)')
+        .order('created_at', { ascending: false });
+      
+      if (quotesError) console.error('Error cargando cotizaciones:', quotesError);
+      else {
+        setCotizaciones(quotesData.map(q => ({
+          ...q,
+          cliente: q.cliente,
+          porcentajes: q.porcentajes,
+          tipoImpuesto: q.tipo_impuesto,
+          descuentoTotal: q.descuento_total,
+          descuentoTipo: q.descuento_tipo,
+          textoIntro: q.texto_intro,
+          items: q.quote_items || []
+        })));
+        
+        // Obtener el último número de cotización
+        if (quotesData.length > 0) {
+          const maxNum = Math.max(...quotesData.map(q => q.numero));
+          setLastQuoteNumber(maxNum);
+        }
+      }
 
-  React.useEffect(() => {
-    localStorage.setItem('cotizador_clients', JSON.stringify(clients));
-  }, [clients]);
+      setLoading(false);
+    };
 
-  function handleSave(c) {
-    setCotizaciones(prev => [c, ...prev]);
-    // Actualizar el último número de cotización si el actual es mayor
+    loadData();
+  }, []);
+
+  // Función para guardar cotizaciones
+  async function handleSave(c) {
+    // 1. Insertar la cotización
+    const { data: quoteData, error: quoteError } = await supabase
+      .from('quotes')
+      .insert({
+        numero: c.numero,
+        fecha: c.fecha,
+        cliente: c.cliente,
+        porcentajes: c.porcentajes,
+        tipo_impuesto: c.tipoImpuesto,
+        descuento_total: c.descuentoTotal,
+        descuento_tipo: c.descuentoTipo,
+        texto_intro: c.textoIntro
+      })
+      .select();
+
+    if (quoteError) {
+      console.error('Error guardando cotización:', quoteError);
+      return;
+    }
+
+    const newQuoteId = quoteData[0].id;
+
+    // 2. Insertar los items de la cotización
+    if (c.items.length > 0) {
+      const itemsToInsert = c.items.map(item => ({
+        quote_id: newQuoteId,
+        desc: item.desc,
+        marca: item.marca,
+        unidad: item.unidad,
+        cant: item.cant,
+        precio: item.precio,
+        descuento: item.descuento
+      }));
+
+      const { error: itemsError } = await supabase
+        .from('quote_items')
+        .insert(itemsToInsert);
+
+      if (itemsError) {
+        console.error('Error guardando items de cotización:', itemsError);
+        return;
+      }
+    }
+
+    // 3. Actualizar el estado local
+    setCotizaciones(prev => [{
+      ...quoteData[0],
+      cliente: quoteData[0].cliente,
+      porcentajes: quoteData[0].porcentajes,
+      tipoImpuesto: quoteData[0].tipo_impuesto,
+      descuentoTotal: quoteData[0].descuento_total,
+      descuentoTipo: quoteData[0].descuento_tipo,
+      textoIntro: quoteData[0].texto_intro,
+      items: c.items
+    }, ...prev]);
+
     if (c.numero > lastQuoteNumber) {
       setLastQuoteNumber(c.numero);
     }
   }
 
+  // Función para eliminar cotizaciones
+  async function handleDeleteQuote(id) {
+    const { error } = await supabase.from('quotes').delete().eq('id', id);
+    if (error) console.error('Error eliminando cotización:', error);
+    else setCotizaciones(prev => prev.filter(x => x.id !== id));
+  }
+
   function handleLoad(c) {
     setLoadedCotiz(c);
     setTab('nueva');
+  }
+
+  // Funciones para productos
+  const saveProduct = async (product) => {
+    if (product.id) {
+      // Actualizar
+      const { error } = await supabase
+        .from('products')
+        .update({ nombre: product.nombre, marca: product.marca, unidad: product.unidad, precio: product.precio })
+        .eq('id', product.id);
+      if (error) {
+        console.error('Error actualizando producto:', error);
+        toast.error('Error actualizando producto');
+      } else {
+        setProducts(prev => prev.map(p => p.id === product.id ? product : p));
+        toast.success('Producto actualizado!');
+      }
+    } else {
+      // Insertar nuevo
+      const { data, error } = await supabase
+        .from('products')
+        .insert({ nombre: product.nombre, marca: product.marca, unidad: product.unidad, precio: product.precio })
+        .select();
+      if (error) {
+        console.error('Error guardando producto:', error);
+        toast.error('Error guardando producto');
+      } else {
+        setProducts(prev => [data[0], ...prev]);
+        toast.success('Producto agregado!');
+      }
+    }
+  };
+
+  const deleteProduct = async (id) => {
+    const { error } = await supabase.from('products').delete().eq('id', id);
+    if (error) {
+      console.error('Error eliminando producto:', error);
+      toast.error('Error eliminando producto');
+    } else {
+      setProducts(prev => prev.filter(p => p.id !== id));
+      toast.success('Producto eliminado!');
+    }
+  };
+
+  // Funciones para clientes
+  const saveClient = async (client) => {
+    if (client.id) {
+      // Actualizar
+      const { error } = await supabase
+        .from('clients')
+        .update({ ref: client.ref, atencion: client.atencion, correo: client.correo, tel: client.tel })
+        .eq('id', client.id);
+      if (error) {
+        console.error('Error actualizando cliente:', error);
+        toast.error('Error actualizando cliente');
+      } else {
+        setClients(prev => prev.map(c => c.id === client.id ? client : c));
+        toast.success('Cliente actualizado!');
+      }
+    } else {
+      // Insertar nuevo
+      const { data, error } = await supabase
+        .from('clients')
+        .insert({ ref: client.ref, atencion: client.atencion, correo: client.correo, tel: client.tel })
+        .select();
+      if (error) {
+        console.error('Error guardando cliente:', error);
+        toast.error('Error guardando cliente');
+      } else {
+        setClients(prev => [data[0], ...prev]);
+        toast.success('Cliente agregado!');
+      }
+    }
+  };
+
+  const deleteClient = async (id) => {
+    const { error } = await supabase.from('clients').delete().eq('id', id);
+    if (error) {
+      console.error('Error eliminando cliente:', error);
+      toast.error('Error eliminando cliente');
+    } else {
+      setClients(prev => prev.filter(c => c.id !== id));
+      toast.success('Cliente eliminado!');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center">
+        <p className="text-gray-500 text-lg">Cargando datos...</p>
+      </div>
+    );
   }
 
   return (
@@ -975,13 +1133,13 @@ export default function App() {
         />
       )}
       {tab === 'guardadas' && (
-        <Guardadas cotizaciones={cotizaciones} onDelete={id => setCotizaciones(prev => prev.filter(x => x.id !== id))} onLoad={handleLoad} />
+        <Guardadas cotizaciones={cotizaciones} onDelete={handleDeleteQuote} onLoad={handleLoad} />
       )}
       {tab === 'clientes' && (
-        <Clientes clients={clients} setClients={setClients} />
+        <Clientes clients={clients} onSave={saveClient} onDelete={deleteClient} />
       )}
       {tab === 'productos' && (
-        <Productos products={products} setProducts={setProducts} />
+        <Productos products={products} onSave={saveProduct} onDelete={deleteProduct} />
       )}
     </div>
   );
