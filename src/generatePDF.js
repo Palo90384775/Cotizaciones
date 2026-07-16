@@ -164,9 +164,8 @@ export async function generatePDF(cotizacion) {
       { lbl: 'Ref.:',     val: cliente.ref      || '' },
       { lbl: 'Señores:',  val: cliente.señores  || '' },
       { lbl: 'NIT:',      val: cliente.nit      || '' },
-      { lbl: 'Atención:', val: cliente.atencion  || '' },
-      { lbl: 'Correo:',  val: cliente.correo    || '' },
-      { lbl: 'Tel:',     val: cliente.tel       || '' },
+      { lbl: 'Atención:', val: cliente.atencion || '' },
+      { lbl: 'Tel.:',     val: cliente.tel      || '' },
     ];
     doc.setFontSize(10);
     fields.forEach((f, i) => {

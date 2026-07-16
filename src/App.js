@@ -119,7 +119,8 @@ function Select({ className = '', children, ...props }) {
 // ── TAB: NUEVA COTIZACIÓN ─────────────────────────────────────────────────────
 function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clients, onClear }) {
   const today = new Date().toISOString().split('T')[0];
-  const [cliente, setCliente] = useState(initialData?.cliente || { ref: '', atencion: '', correo: '', tel: '', señores: '', nit: '' });
+  const [cliente, setCliente] = useState(initialData?.cliente || { atencion: '', correo: '', tel: '', señores: '', nit: '' });
+  const [proyectoRef, setProyectoRef] = useState(initialData?.cliente?.ref || '');
   const [numero, setNumero] = useState(initialData?.numero || lastQuoteNumber + 1);
   const [fecha, setFecha] = useState(initialData?.fecha || today);
   const [porc, setPorc] = useState(initialData?.porc || DEFAULT_PORCENTAJES);
@@ -205,7 +206,7 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clien
   }
 
   function handleSave() {
-    if (!numero && !cliente.ref) { 
+    if (!numero && !proyectoRef) { 
       toast.error('Agrega número de cotización o referencia'); 
       return; 
     }
@@ -215,7 +216,7 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clien
     }
     onSave({ 
       id: initialData?.id, 
-      cliente, 
+      cliente: { ...cliente, ref: proyectoRef }, 
       numero, 
       fecha, 
       porc, 
@@ -258,7 +259,8 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clien
     if (onClear) {
       onClear();
     }
-    setCliente({ ref: '', atencion: '', correo: '', tel: '', señores: '', nit: '' });
+    setCliente({ atencion: '', correo: '', tel: '', señores: '', nit: '' });
+    setProyectoRef('');
     setNumero(lastQuoteNumber + 1); 
     setFecha(today);
     setPorc(DEFAULT_PORCENTAJES);
@@ -289,20 +291,26 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clien
                     if (selectedId) {
                       const client = clients.find(c => c.id === selectedId);
                       if (client) {
-                        setCliente(client);
+                        setCliente({
+                          atencion: client.atencion,
+                          correo: client.correo,
+                          tel: client.tel,
+                          señores: client.señores,
+                          nit: client.nit
+                        });
                       }
                     }
                   }}
                 >
                   <option value="">— Seleccionar cliente —</option>
                   {clients.map(c => (
-                    <option key={c.id} value={c.id}>{c.ref}</option>
+                    <option key={c.id} value={c.id}>{c.nombre || c.ref}</option>
                   ))}
                 </Select>
               </Field>
             )}
             <Field label="Ref. / Proyecto">
-              <Input placeholder="Ej: COTIZ. VILLAVICENCIO" value={cliente.ref} onChange={e => setCliente(p => ({ ...p, ref: e.target.value }))} />
+              <Input placeholder="Ej: COTIZ. VILLAVICENCIO" value={proyectoRef} onChange={e => setProyectoRef(e.target.value)} />
             </Field>
             <Field label="Señores">
               <Input placeholder="Señores" value={cliente.señores} onChange={e => setCliente(p => ({ ...p, señores: e.target.value }))} />
@@ -795,12 +803,12 @@ function Productos({ products, onSave, onDelete }) {
 
 // ── TAB: CLIENTES ─────────────────────────────────────────────────────────────
 function Clientes({ clients, onSave, onDelete }) {
-  const blank = { ref: '', atencion: '', correo: '', tel: '', señores: '', nit: '' };
+  const blank = { nombre: '', atencion: '', correo: '', tel: '', señores: '', nit: '' };
   const [form, setForm] = useState(blank);
   const [editing, setEditing] = useState(null);
 
   async function handleSave() {
-    if (!form.ref) { 
+    if (!form.nombre) { 
       toast.error('Ingresa el nombre del cliente'); 
       return; 
     }
@@ -831,7 +839,7 @@ function Clientes({ clients, onSave, onDelete }) {
         <div className="p-6">
           <div className="grid grid-cols-2 gap-4 mb-4">
             <Field label="Nombre del cliente">
-              <Input value={form.ref} onChange={e => setForm(p => ({ ...p, ref: e.target.value }))} placeholder="Ej: Cliente ABC" />
+              <Input value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Ej: Cliente ABC" />
             </Field>
             <Field label="Atención">
               <Input value={form.atencion} onChange={e => setForm(p => ({ ...p, atencion: e.target.value }))} placeholder="Nombre del contacto" />
@@ -872,7 +880,7 @@ function Clientes({ clients, onSave, onDelete }) {
           {clients.map((c, i) => (
             <div key={c.id} className="bg-white rounded-xl border border-gray-200 p-4 flex justify-between items-center shadow-sm hover:shadow-md transition-all duration-200">
               <div className="min-w-0 mr-3">
-                <p className="font-medium text-sm text-gray-900 truncate">{c.ref}</p>
+                <p className="font-medium text-sm text-gray-900 truncate">{c.nombre || c.ref}</p>
                 {c.atencion && <p className="text-xs text-gray-400 mt-0.5">👤 {c.atencion}</p>}
                 {c.correo && <p className="text-xs text-gray-400">📧 {c.correo}</p>}
                 {c.tel && <p className="text-xs text-gray-400">📞 {c.tel}</p>}
@@ -884,7 +892,7 @@ function Clientes({ clients, onSave, onDelete }) {
                 <button onClick={async () => { 
                   const result = await Swal.fire({
                     title: '¿Eliminar cliente?',
-                    text: c.ref,
+                    text: c.nombre || c.ref,
                     icon: 'warning',
                     showCancelButton: true,
                     confirmButtonColor: '#003087',
@@ -1172,7 +1180,7 @@ export default function App() {
       // Actualizar
       const { error } = await supabase
         .from('clients')
-        .update({ ref: client.ref, atencion: client.atencion, correo: client.correo, tel: client.tel, señores: client.señores, nit: client.nit })
+        .update({ nombre: client.nombre, ref: client.nombre, atencion: client.atencion, correo: client.correo, tel: client.tel, señores: client.señores, nit: client.nit })
         .eq('id', client.id);
       if (error) {
         console.error('Error actualizando cliente:', error);
@@ -1185,7 +1193,7 @@ export default function App() {
       // Insertar nuevo
       const { data, error } = await supabase
         .from('clients')
-        .insert({ ref: client.ref, atencion: client.atencion, correo: client.correo, tel: client.tel, señores: client.señores, nit: client.nit })
+        .insert({ nombre: client.nombre, ref: client.nombre, atencion: client.atencion, correo: client.correo, tel: client.tel, señores: client.señores, nit: client.nit })
         .select();
       if (error) {
         console.error('Error guardando cliente:', error);
