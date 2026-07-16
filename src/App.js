@@ -133,6 +133,45 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clien
   const [descuentoTipo, setDescuentoTipo] = useState(initialData?.descuentoTipo || 'porcentaje'); // 'porcentaje' o 'monto'
   const [textoIntro, setTextoIntro] = useState(initialData?.textoIntro || 
     'De acuerdo a su amable solicitud tenemos el gusto de enviarle la siguiente propuesta comercial para su respectivo estudio:');
+  const [spellCheckLoading, setSpellCheckLoading] = useState(false);
+
+  // Spell check function using LanguageTool API
+  const checkSpelling = async (text, setText) => {
+    if (!text.trim()) return;
+    setSpellCheckLoading(true);
+    try {
+      const response = await fetch('https://api.languagetool.org/v2/check', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          text: text,
+          language: 'es',
+        }),
+      });
+      const data = await response.json();
+      let correctedText = text;
+      // Apply corrections from last to first to avoid index issues
+      const matches = data.matches.sort((a, b) => b.offset - a.offset);
+      for (const match of matches) {
+        if (match.replacements && match.replacements.length > 0) {
+          const replacement = match.replacements[0].value;
+          correctedText = 
+            correctedText.slice(0, match.offset) + 
+            replacement + 
+            correctedText.slice(match.offset + match.length);
+        }
+      }
+      setText(correctedText);
+      toast.success('Ortografía corregida ✓');
+    } catch (error) {
+      console.error('Error checking spelling:', error);
+      toast.error('Error al corregir ortografía');
+    } finally {
+      setSpellCheckLoading(false);
+    }
+  };
 
   // Calcular subtotal por ítem incluyendo descuentos por producto
   const calcularSubtotalItem = (item) => {
@@ -310,16 +349,118 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clien
               </Field>
             )}
             <Field label="Ref. / Proyecto">
-              <Input placeholder="Ej: COTIZ. VILLAVICENCIO" value={proyectoRef} onChange={e => setProyectoRef(e.target.value)} />
+              <div className="flex items-center gap-1">
+                <Input placeholder="Ej: COTIZ. VILLAVICENCIO" value={proyectoRef} onChange={e => setProyectoRef(e.target.value)} className="flex-1" />
+                <button 
+                  onClick={async () => {
+                    if (!proyectoRef.trim()) return;
+                    setSpellCheckLoading(true);
+                    try {
+                      const response = await fetch('https://api.languagetool.org/v2/check', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: new URLSearchParams({ text: proyectoRef, language: 'es' }),
+                      });
+                      const data = await response.json();
+                      let correctedText = proyectoRef;
+                      const matches = data.matches.sort((a, b) => b.offset - a.offset);
+                      for (const match of matches) {
+                        if (match.replacements?.[0]) {
+                          correctedText = correctedText.slice(0, match.offset) + match.replacements[0].value + correctedText.slice(match.offset + match.length);
+                        }
+                      }
+                      setProyectoRef(correctedText);
+                      toast.success('Ortografía corregida ✓');
+                    } catch (error) {
+                      toast.error('Error al corregir ortografía');
+                    } finally {
+                      setSpellCheckLoading(false);
+                    }
+                  }}
+                  disabled={spellCheckLoading}
+                  className="text-xs bg-blue-50 text-blue-600 px-2 py-2 rounded hover:bg-blue-100 transition-colors disabled:opacity-50"
+                  title="Corregir ortografía"
+                >✓</button>
+              </div>
             </Field>
             <Field label="Señores">
-              <Input placeholder="Señores" value={cliente.señores} onChange={e => setCliente(p => ({ ...p, señores: e.target.value }))} />
+              <div className="flex items-center gap-1">
+                <Input placeholder="Señores" value={cliente.señores} onChange={e => setCliente(p => ({ ...p, señores: e.target.value }))} className="flex-1" />
+                <button 
+                  onClick={async () => {
+                    if (!cliente.señores.trim()) return;
+                    setSpellCheckLoading(true);
+                    try {
+                      const response = await fetch('https://api.languagetool.org/v2/check', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: new URLSearchParams({ text: cliente.señores, language: 'es' }),
+                      });
+                      const data = await response.json();
+                      let correctedText = cliente.señores;
+                      const matches = data.matches.sort((a, b) => b.offset - a.offset);
+                      for (const match of matches) {
+                        if (match.replacements?.[0]) {
+                          correctedText = correctedText.slice(0, match.offset) + match.replacements[0].value + correctedText.slice(match.offset + match.length);
+                        }
+                      }
+                      setCliente(p => ({ ...p, señores: correctedText }));
+                      toast.success('Ortografía corregida ✓');
+                    } catch (error) {
+                      toast.error('Error al corregir ortografía');
+                    } finally {
+                      setSpellCheckLoading(false);
+                    }
+                  }}
+                  disabled={spellCheckLoading}
+                  className="text-xs bg-blue-50 text-blue-600 px-2 py-2 rounded hover:bg-blue-100 transition-colors disabled:opacity-50"
+                  title="Corregir ortografía"
+                >✓</button>
+              </div>
             </Field>
             <Field label="NIT">
               <Input placeholder="NIT" value={cliente.nit} onChange={e => setCliente(p => ({ ...p, nit: e.target.value }))} />
             </Field>
             <Field label="Atención">
-              <Input placeholder="Nombre del contacto" value={cliente.atencion} onChange={e => setCliente(p => ({ ...p, atencion: e.target.value }))} />
+              <div className="flex items-center gap-1">
+                <Input placeholder="Nombre del contacto" value={cliente.atencion} onChange={e => setCliente(p => ({ ...p, atencion: e.target.value }))} className="flex-1" />
+                <button 
+                  onClick={async () => {
+                    if (!cliente.atencion.trim()) return;
+                    setSpellCheckLoading(true);
+                    try {
+                      const response = await fetch('https://api.languagetool.org/v2/check', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: new URLSearchParams({ text: cliente.atencion, language: 'es' }),
+                      });
+                      const data = await response.json();
+                      let correctedText = cliente.atencion;
+                      const matches = data.matches.sort((a, b) => b.offset - a.offset);
+                      for (const match of matches) {
+                        if (match.replacements?.[0]) {
+                          correctedText = correctedText.slice(0, match.offset) + match.replacements[0].value + correctedText.slice(match.offset + match.length);
+                        }
+                      }
+                      setCliente(p => ({ ...p, atencion: correctedText }));
+                      toast.success('Ortografía corregida ✓');
+                    } catch (error) {
+                      toast.error('Error al corregir ortografía');
+                    } finally {
+                      setSpellCheckLoading(false);
+                    }
+                  }}
+                  disabled={spellCheckLoading}
+                  className="text-xs bg-blue-50 text-blue-600 px-2 py-2 rounded hover:bg-blue-100 transition-colors disabled:opacity-50"
+                  title="Corregir ortografía"
+                >✓</button>
+              </div>
             </Field>
             <Field label="Correo">
               <Input placeholder="correo@empresa.com" value={cliente.correo} onChange={e => setCliente(p => ({ ...p, correo: e.target.value }))} />
@@ -335,7 +476,7 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clien
                 <Input type="date" value={fecha} onChange={e => setFecha(e.target.value)} />
               </Field>
               <Field label="Número de cotización">
-                <Input type="number" placeholder="Ej: 556" value={numero} onChange={e => setNumero(e.target.value)} />
+                <Input type="number" placeholder="Ej: 556" value={numero} readOnly className="bg-gray-50" />
               </Field>
             </div>
             
@@ -430,14 +571,22 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clien
 
             {/* Texto intro editable */}
             <div className="bg-[#f8fafc] rounded-lg p-4 border border-gray-100">
-              <Field label="Texto introductorio">
-                <textarea 
-                  value={textoIntro} 
-                  onChange={e => setTextoIntro(e.target.value)} 
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                  rows={3}
-                />
-              </Field>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Texto introductorio</label>
+                <button 
+                  onClick={() => checkSpelling(textoIntro, setTextoIntro)} 
+                  disabled={spellCheckLoading}
+                  className="flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 transition-colors disabled:opacity-50"
+                >
+                  {spellCheckLoading ? 'Corrigiendo...' : 'Corregir Ortografía'}
+                </button>
+              </div>
+              <textarea 
+                value={textoIntro} 
+                onChange={e => setTextoIntro(e.target.value)} 
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                rows={3}
+              />
             </div>
           </div>
         </div>
@@ -516,9 +665,54 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clien
                     <tr key={it.id} className="border-b border-gray-100 hover:bg-gray-50">
                       <td className="px-3 py-2 text-gray-400 text-xs text-center">1.{i + 1}</td>
                       <td className="px-3 py-2">
-                        <input value={it.desc} onChange={e => updateItem(it.id, 'desc', e.target.value)}
-                          className="w-full text-sm bg-transparent border-0 focus:outline-none focus:bg-blue-50 rounded px-1" />
-                      </td>
+              <div className="flex items-center gap-1">
+                <input value={it.desc} onChange={e => updateItem(it.id, 'desc', e.target.value)}
+                  className="flex-1 text-sm bg-transparent border-0 focus:outline-none focus:bg-blue-50 rounded px-1" />
+                <button 
+                  onClick={async () => {
+                    // Spell check for item description
+                    if (!it.desc.trim()) return;
+                    setSpellCheckLoading(true);
+                    try {
+                      const response = await fetch('https://api.languagetool.org/v2/check', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: new URLSearchParams({
+                          text: it.desc,
+                          language: 'es',
+                        }),
+                      });
+                      const data = await response.json();
+                      let correctedText = it.desc;
+                      const matches = data.matches.sort((a, b) => b.offset - a.offset);
+                      for (const match of matches) {
+                        if (match.replacements && match.replacements.length > 0) {
+                          const replacement = match.replacements[0].value;
+                          correctedText = 
+                            correctedText.slice(0, match.offset) + 
+                            replacement + 
+                            correctedText.slice(match.offset + match.length);
+                        }
+                      }
+                      updateItem(it.id, 'desc', correctedText);
+                      toast.success('Ortografía corregida ✓');
+                    } catch (error) {
+                      console.error('Error checking spelling:', error);
+                      toast.error('Error al corregir ortografía');
+                    } finally {
+                      setSpellCheckLoading(false);
+                    }
+                  }}
+                  disabled={spellCheckLoading}
+                  className="text-xs bg-blue-50 text-blue-600 px-1 py-0.5 rounded hover:bg-blue-100 transition-colors disabled:opacity-50"
+                  title="Corregir ortografía"
+                >
+                  ✓
+                </button>
+              </div>
+            </td>
                       <td className="px-3 py-2">
                         <input value={it.marca} onChange={e => updateItem(it.id, 'marca', e.target.value)}
                           className="w-full text-sm bg-transparent border-0 focus:outline-none focus:bg-blue-50 rounded px-1" />
