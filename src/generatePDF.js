@@ -297,7 +297,7 @@ export async function generatePDF(cotizacion) {
 
     // ── ITEMS TABLE (with discount column) ───────────────────────────────────────────────
     const tableData = items.map((it, i) => [
-      `1.${i + 1}`,
+      `${i + 1}`,
       it.desc,
       it.marca || '',
       it.unidad,
