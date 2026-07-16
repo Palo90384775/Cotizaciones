@@ -663,7 +663,7 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clien
                 <tbody>
                   {items.map((it, i) => (
                     <tr key={it.id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="px-3 py-2 text-gray-400 text-xs text-center">1.{i + 1}</td>
+                      <td className="px-3 py-2 text-gray-400 text-xs text-center">{i + 1}</td>
                       <td className="px-3 py-2">
               <div className="flex items-center gap-1">
                 <input value={it.desc} onChange={e => updateItem(it.id, 'desc', e.target.value)}
