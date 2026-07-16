@@ -138,8 +138,17 @@ export async function generatePDF(cotizacion) {
     // ── CLIENT BOX ───────────────────────────────────────────────
     const boxY = 132;
     const cbW  = Math.round(CW * 0.55);
-    const cbH  = 150;
     const hdrH = 28;
+    // Calculate cbH based on number of non-empty fields
+    const fields = [
+      { lbl: 'Ref.:',     val: cliente.ref      || '' },
+      { lbl: 'Señores:',  val: cliente.señores  || '' },
+      { lbl: 'NIT:',      val: cliente.nit      || '' },
+      { lbl: 'Atención:', val: cliente.atencion || '' },
+      { lbl: 'Tel.:',     val: cliente.tel      || '' },
+    ];
+    const nonEmptyFields = fields.filter(f => f.val.trim() !== '');
+    const cbH  = hdrH + 20 + (nonEmptyFields.length * 19); // 20px padding, 19px per field
 
     doc.setFillColor(237, 242, 251);
     doc.roundedRect(ML, boxY, cbW, cbH, 10, 10, 'F');
@@ -160,15 +169,8 @@ export async function generatePDF(cotizacion) {
     doc.setTextColor(255, 255, 255);
     doc.text('DATOS DEL CLIENTE', ML + 40, boxY + hdrH / 2 + 4);
 
-    const fields = [
-      { lbl: 'Ref.:',     val: cliente.ref      || '' },
-      { lbl: 'Señores:',  val: cliente.señores  || '' },
-      { lbl: 'NIT:',      val: cliente.nit      || '' },
-      { lbl: 'Atención:', val: cliente.atencion || '' },
-      { lbl: 'Tel.:',     val: cliente.tel      || '' },
-    ];
     doc.setFontSize(10);
-    fields.forEach((f, i) => {
+    nonEmptyFields.forEach((f, i) => {
       const fy = boxY + hdrH + 14 + i * 19;
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(40, 40, 40);
