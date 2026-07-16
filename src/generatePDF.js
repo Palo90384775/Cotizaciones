@@ -138,7 +138,7 @@ export async function generatePDF(cotizacion) {
     // ── CLIENT BOX ───────────────────────────────────────────────
     const boxY = 132;
     const cbW  = Math.round(CW * 0.55);
-    const cbH  = 112;
+    const cbH  = 150;
     const hdrH = 28;
 
     doc.setFillColor(237, 242, 251);
@@ -162,6 +162,8 @@ export async function generatePDF(cotizacion) {
 
     const fields = [
       { lbl: 'Ref.:',     val: cliente.ref      || '' },
+      { lbl: 'Señores:',  val: cliente.señores  || '' },
+      { lbl: 'NIT:',      val: cliente.nit      || '' },
       { lbl: 'Atención:', val: cliente.atencion  || '' },
       { lbl: 'Correo:',  val: cliente.correo    || '' },
       { lbl: 'Tel:',     val: cliente.tel       || '' },
@@ -252,7 +254,7 @@ export async function generatePDF(cotizacion) {
 
     // ── SMART DYNAMIC TABLE SIZING ───────────────────────────────
     const TABLE_START   = tblBandY + 28;
-    const AFTER_TABLE   = 20 + 102 + 6 + 14 + 70 + 8 + 85 + 20;
+    const AFTER_TABLE   = 15 + 85 + 4 + 12 + 60 + 6 + 70 + 15;
     const availH        = pageHeight - TABLE_START - AFTER_TABLE;
 
     const descColW = CW - 30 - 52 - 40 - 48 - 70 - 70 - 30 - 20; // Ajustamos para columna descuento
@@ -381,11 +383,11 @@ export async function generatePDF(cotizacion) {
     });
 
     // ── FOOTER CARDS ─────────────────────────────────────────────
-    const ftY  = totY + totals.length * rowH + 14;
-    const gap  = 10;
+    const ftY  = totY + totals.length * rowH + 12;
+    const gap  = 8;
     const crdW = (CW - gap * 2) / 3;
-    const crdH = 70;
-    const icoR = 18;
+    const crdH = 60;
+    const icoR = 14;
 
     const cards = [
       {
@@ -407,10 +409,10 @@ export async function generatePDF(cotizacion) {
         body:  '1 año por defectos de fabricación y mano de obra',
         drawIcon: (cx, cy) => {
           doc.setFillColor(255, 255, 255);
-          doc.roundedRect(cx - 9, cy - 11, 18, 18, 4, 4, 'F');
+          doc.roundedRect(cx - 7, cy - 9, 14, 14, 3, 3, 'F');
           doc.setFillColor(0, 48, 135);
-          doc.rect(cx - 5, cy - 1, 4, 2, 'F');
-          doc.rect(cx - 2, cy - 4, 2, 7, 'F');
+          doc.rect(cx - 4, cy - 1, 3, 2, 'F');
+          doc.rect(cx - 1, cy - 3, 2, 6, 'F');
         },
       },
       {
@@ -418,8 +420,8 @@ export async function generatePDF(cotizacion) {
         body:  'Contado',
         drawIcon: (cx, cy) => {
           doc.setFillColor(255, 255, 255);
-          doc.rect(cx - 8, cy - 3, 16, 3, 'F');
-          doc.rect(cx - 8, cy + 2, 16, 3, 'F');
+          doc.rect(cx - 6, cy - 2, 12, 2.5, 'F');
+          doc.rect(cx - 6, cy + 2, 12, 2.5, 'F');
         },
       },
     ];
@@ -427,65 +429,65 @@ export async function generatePDF(cotizacion) {
     cards.forEach((card, i) => {
       const cx = ML + i * (crdW + gap);
       doc.setFillColor(237, 242, 251);
-      doc.roundedRect(cx, ftY, crdW, crdH, 12, 12, 'F');
-      const icoCx = cx + icoR + 12;
+      doc.roundedRect(cx, ftY, crdW, crdH, 10, 10, 'F');
+      const icoCx = cx + icoR + 10;
       const icoCy = ftY + crdH / 2;
       doc.setFillColor(0, 48, 135);
       doc.circle(icoCx, icoCy, icoR, 'F');
       card.drawIcon(icoCx, icoCy);
-      const txtX = icoCx + icoR + 10;
-      const txtW = crdW - (txtX - cx) - 8;
+      const txtX = icoCx + icoR + 8;
+      const txtW = crdW - (txtX - cx) - 6;
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
+      doc.setFontSize(8.5);
       doc.setTextColor(0, 48, 135);
       const titleLines = doc.splitTextToSize(card.title, txtW);
-      doc.text(titleLines, txtX, ftY + 22);
+      doc.text(titleLines, txtX, ftY + 18);
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8.5);
+      doc.setFontSize(7.5);
       doc.setTextColor(70, 70, 70);
       const bodyLines = doc.splitTextToSize(card.body, txtW);
-      doc.text(bodyLines, txtX, ftY + 22 + titleLines.length * 11 + 4);
+      doc.text(bodyLines, txtX, ftY + 18 + titleLines.length * 10 + 3);
     });
 
     // ── SIGNATURE ────────────────────────────────────────────────
-    const sigBaseY  = ftY + crdH + 8;
+    const sigBaseY  = ftY + crdH + 6;
     const sigStartX = 115;
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9.5);
-    doc.setTextColor(80, 80, 80);
-    doc.text('Cordialmente,', sigStartX, sigBaseY);
-
-    const fW = 80;
-    const fH = (firmaImg.height / firmaImg.width) * fW;
-    doc.addImage(firmaImg, 'PNG', sigStartX - 4, sigBaseY + 6, fW, fH);
-
-    doc.setDrawColor(120, 120, 120);
-    doc.setLineWidth(1);
-    doc.line(sigStartX - 4, sigBaseY + fH + 10, sigStartX + fW + 14, sigBaseY + fH + 10);
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.setTextColor(25, 25, 25);
-    doc.text('Pablo Jiménez', sigStartX + 10, sigBaseY + fH + 22);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.setTextColor(80, 80, 80);
-    doc.text('Director Comercial', sigStartX + 4, sigBaseY + fH + 34);
+    doc.text('Cordialmente,', sigStartX, sigBaseY);
+
+    const fW = 70;
+    const fH = (firmaImg.height / firmaImg.width) * fW;
+    doc.addImage(firmaImg, 'PNG', sigStartX - 4, sigBaseY + 5, fW, fH);
+
+    doc.setDrawColor(120, 120, 120);
+    doc.setLineWidth(1);
+    doc.line(sigStartX - 4, sigBaseY + fH + 8, sigStartX + fW + 14, sigBaseY + fH + 8);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(25, 25, 25);
+    doc.text('Pablo Jiménez', sigStartX + 10, sigBaseY + fH + 18);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(80, 80, 80);
+    doc.text('Director Comercial', sigStartX + 4, sigBaseY + fH + 28);
 
     // ── THANK-YOU (centered beside signature block) ────────────────
-    const sigBlockH = fH + 44;
-    const tyX       = pageWidth - MR - 220;
-    const tyBlockH  = 32 + 20;
+    const sigBlockH = fH + 36;
+    const tyX       = pageWidth - MR - 210;
+    const tyBlockH  = 28 + 18;
     const tyY       = sigBaseY + (sigBlockH - tyBlockH) / 2;
 
     doc.setFont('helvetica', 'italic');
-    doc.setFontSize(9.5);
+    doc.setFontSize(8.5);
     doc.setTextColor(85, 85, 85);
     doc.text('Agradecemos su confianza y quedamos atentos', tyX, tyY);
-    doc.text('a cualquier observación.', tyX, tyY + 16);
-    doc.text('Será un gusto poder atenderle.', tyX, tyY + 32);
+    doc.text('a cualquier observación.', tyX, tyY + 14);
+    doc.text('Será un gusto poder atenderle.', tyX, tyY + 28);
 
     // ── SOCIAL ICONS ─────────────────────────────────────────────
     const socials = [
@@ -493,11 +495,11 @@ export async function generatePDF(cotizacion) {
       { img: waImg,  url: 'https://wa.me/573203458316' },
       { img: webImg, url: 'https://redescolombia.com.co/' },
     ];
-    const iconSize    = 20;
-    const iconGap     = 7;
-    const iconsY      = tyY + 48;
+    const iconSize    = 18;
+    const iconGap     = 6;
+    const iconsY      = tyY + 42;
     const totalIconsW = socials.length * iconSize + (socials.length - 1) * iconGap;
-    const iconsStartX = tyX + (220 - totalIconsW) / 2;
+    const iconsStartX = tyX + (210 - totalIconsW) / 2;
 
     socials.forEach((s, si) => {
       const ix = iconsStartX + si * (iconSize + iconGap);

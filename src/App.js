@@ -117,9 +117,9 @@ function Select({ className = '', children, ...props }) {
 }
 
 // ── TAB: NUEVA COTIZACIÓN ─────────────────────────────────────────────────────
-function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clients }) {
+function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clients, onClear }) {
   const today = new Date().toISOString().split('T')[0];
-  const [cliente, setCliente] = useState(initialData?.cliente || { ref: '', atencion: '', correo: '', tel: '' });
+  const [cliente, setCliente] = useState(initialData?.cliente || { ref: '', atencion: '', correo: '', tel: '', señores: '', nit: '' });
   const [numero, setNumero] = useState(initialData?.numero || lastQuoteNumber + 1);
   const [fecha, setFecha] = useState(initialData?.fecha || today);
   const [porc, setPorc] = useState(initialData?.porc || DEFAULT_PORCENTAJES);
@@ -214,7 +214,7 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clien
       return; 
     }
     onSave({ 
-      id: uid(), 
+      id: initialData?.id, 
       cliente, 
       numero, 
       fecha, 
@@ -255,7 +255,10 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clien
   }
 
   function handleClear() {
-    setCliente({ ref: '', atencion: '', correo: '', tel: '' });
+    if (onClear) {
+      onClear();
+    }
+    setCliente({ ref: '', atencion: '', correo: '', tel: '', señores: '', nit: '' });
     setNumero(lastQuoteNumber + 1); 
     setFecha(today);
     setPorc(DEFAULT_PORCENTAJES);
@@ -300,6 +303,12 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clien
             )}
             <Field label="Ref. / Proyecto">
               <Input placeholder="Ej: COTIZ. VILLAVICENCIO" value={cliente.ref} onChange={e => setCliente(p => ({ ...p, ref: e.target.value }))} />
+            </Field>
+            <Field label="Señores">
+              <Input placeholder="Señores" value={cliente.señores} onChange={e => setCliente(p => ({ ...p, señores: e.target.value }))} />
+            </Field>
+            <Field label="NIT">
+              <Input placeholder="NIT" value={cliente.nit} onChange={e => setCliente(p => ({ ...p, nit: e.target.value }))} />
             </Field>
             <Field label="Atención">
               <Input placeholder="Nombre del contacto" value={cliente.atencion} onChange={e => setCliente(p => ({ ...p, atencion: e.target.value }))} />
@@ -589,9 +598,16 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clien
 
           {/* Actions */}
           <div className="flex gap-3 justify-end mt-6">
-            <button onClick={handleClear} className="flex items-center gap-2 border border-gray-200 px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">
-              <Trash2 size={14} /> Limpiar
-            </button>
+            {initialData && (
+              <button onClick={handleClear} className="flex items-center gap-2 border border-green-500 text-green-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-50 transition-colors">
+                <Plus size={14} /> Crear Nueva Cotización
+              </button>
+            )}
+            {!initialData && (
+              <button onClick={handleClear} className="flex items-center gap-2 border border-gray-200 px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+                <Trash2 size={14} /> Limpiar
+              </button>
+            )}
             <button onClick={handleSave} className="flex items-center gap-2 border border-[#003087] text-[#003087] px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-50 transition-colors">
               <Check size={14} /> Guardar
             </button>
@@ -779,7 +795,7 @@ function Productos({ products, onSave, onDelete }) {
 
 // ── TAB: CLIENTES ─────────────────────────────────────────────────────────────
 function Clientes({ clients, onSave, onDelete }) {
-  const blank = { ref: '', atencion: '', correo: '', tel: '' };
+  const blank = { ref: '', atencion: '', correo: '', tel: '', señores: '', nit: '' };
   const [form, setForm] = useState(blank);
   const [editing, setEditing] = useState(null);
 
@@ -819,6 +835,12 @@ function Clientes({ clients, onSave, onDelete }) {
             </Field>
             <Field label="Atención">
               <Input value={form.atencion} onChange={e => setForm(p => ({ ...p, atencion: e.target.value }))} placeholder="Nombre del contacto" />
+            </Field>
+            <Field label="Señores">
+              <Input value={form.señores} onChange={e => setForm(p => ({ ...p, señores: e.target.value }))} placeholder="Señores" />
+            </Field>
+            <Field label="NIT">
+              <Input value={form.nit} onChange={e => setForm(p => ({ ...p, nit: e.target.value }))} placeholder="NIT" />
             </Field>
             <Field label="Correo">
               <Input value={form.correo} onChange={e => setForm(p => ({ ...p, correo: e.target.value }))} placeholder="correo@empresa.com" />
@@ -954,64 +976,139 @@ export default function App() {
 
   // Función para guardar cotizaciones
   async function handleSave(c) {
-    // 1. Insertar la cotización
-    const { data: quoteData, error: quoteError } = await supabase
-      .from('quotes')
-      .insert({
-        numero: c.numero,
-        fecha: c.fecha,
-        cliente: c.cliente,
-        porcentajes: c.porcentajes,
-        tipo_impuesto: c.tipoImpuesto,
-        descuento_total: c.descuentoTotal,
-        descuento_tipo: c.descuentoTipo,
-        texto_intro: c.textoIntro
-      })
-      .select();
-
-    if (quoteError) {
-      console.error('Error guardando cotización:', quoteError);
-      return;
-    }
-
-    const newQuoteId = quoteData[0].id;
-
-    // 2. Insertar los items de la cotización
-    if (c.items.length > 0) {
-      const itemsToInsert = c.items.map(item => ({
-        quote_id: newQuoteId,
-        desc: item.desc,
-        marca: item.marca,
-        unidad: item.unidad,
-        cant: item.cant,
-        precio: item.precio,
-        descuento: item.descuento
-      }));
-
-      const { error: itemsError } = await supabase
-        .from('quote_items')
-        .insert(itemsToInsert);
-
-      if (itemsError) {
-        console.error('Error guardando items de cotización:', itemsError);
+    if (c.id) {
+      // Update existing quote
+      const { error: quoteError } = await supabase
+        .from('quotes')
+        .update({
+          numero: c.numero,
+          fecha: c.fecha,
+          cliente: c.cliente,
+          porcentajes: c.porc,
+          tipo_impuesto: c.tipoImpuesto,
+          descuento_total: c.descuentoTotal,
+          descuento_tipo: c.descuentoTipo,
+          texto_intro: c.textoIntro
+        })
+        .eq('id', c.id);
+      
+      if (quoteError) {
+        console.error('Error actualizando cotización:', quoteError);
         return;
       }
-    }
+      
+      // Delete old items
+      await supabase
+        .from('quote_items')
+        .delete()
+        .eq('quote_id', c.id);
+        
+      // Insert new items
+      if (c.items.length > 0) {
+        const itemsToInsert = c.items.map(item => ({
+          quote_id: c.id,
+          desc: item.desc,
+          marca: item.marca,
+          unidad: item.unidad,
+          cant: item.cant,
+          precio: item.precio,
+          descuento: item.descuento
+        }));
+        
+        const { error: itemsError } = await supabase
+          .from('quote_items')
+          .insert(itemsToInsert);
+          
+        if (itemsError) {
+          console.error('Error guardando items de cotización:', itemsError);
+          return;
+        }
+      }
+      
+      // Update local state
+      setCotizaciones(prev => prev.map(q => 
+        q.id === c.id 
+          ? {
+              ...q,
+              numero: c.numero,
+              fecha: c.fecha,
+              cliente: c.cliente,
+              porcentajes: c.porc,
+              tipoImpuesto: c.tipoImpuesto,
+              descuentoTotal: c.descuentoTotal,
+              descuentoTipo: c.descuentoTipo,
+              textoIntro: c.textoIntro,
+              items: c.items
+            }
+          : q
+      ));
+      
+      if (c.numero > lastQuoteNumber) {
+        setLastQuoteNumber(c.numero);
+      }
+    } else {
+      // Insert new quote
+      const { data: quoteData, error: quoteError } = await supabase
+        .from('quotes')
+        .insert({
+          numero: c.numero,
+          fecha: c.fecha,
+          cliente: c.cliente,
+          porcentajes: c.porc,
+          tipo_impuesto: c.tipoImpuesto,
+          descuento_total: c.descuentoTotal,
+          descuento_tipo: c.descuentoTipo,
+          texto_intro: c.textoIntro
+        })
+        .select();
 
-    // 3. Actualizar el estado local
-    setCotizaciones(prev => [{
-      ...quoteData[0],
-      cliente: quoteData[0].cliente,
-      porcentajes: quoteData[0].porcentajes,
-      tipoImpuesto: quoteData[0].tipo_impuesto,
-      descuentoTotal: quoteData[0].descuento_total,
-      descuentoTipo: quoteData[0].descuento_tipo,
-      textoIntro: quoteData[0].texto_intro,
-      items: c.items
-    }, ...prev]);
+      if (quoteError) {
+        console.error('Error guardando cotización:', quoteError);
+        return;
+      }
 
-    if (c.numero > lastQuoteNumber) {
-      setLastQuoteNumber(c.numero);
+      const newQuoteId = quoteData[0].id;
+
+      // 2. Insertar los items de la cotización
+      if (c.items.length > 0) {
+        const itemsToInsert = c.items.map(item => ({
+          quote_id: newQuoteId,
+          desc: item.desc,
+          marca: item.marca,
+          unidad: item.unidad,
+          cant: item.cant,
+          precio: item.precio,
+          descuento: item.descuento
+        }));
+
+        const { error: itemsError } = await supabase
+          .from('quote_items')
+          .insert(itemsToInsert);
+
+        if (itemsError) {
+          console.error('Error guardando items de cotización:', itemsError);
+          return;
+        }
+      }
+
+      // 3. Actualizar el estado local
+      setCotizaciones(prev => [{
+        ...quoteData[0],
+        cliente: quoteData[0].cliente,
+        porcentajes: quoteData[0].porcentajes,
+        tipoImpuesto: quoteData[0].tipo_impuesto,
+        descuentoTotal: quoteData[0].descuento_total,
+        descuentoTipo: quoteData[0].descuento_tipo,
+        textoIntro: quoteData[0].texto_intro,
+        items: c.items
+      }, ...prev]);
+
+      if (c.numero > lastQuoteNumber) {
+        setLastQuoteNumber(c.numero);
+      }
+      
+      // Clear loaded cotiz
+      setLoadedCotiz(null);
     }
   }
 
@@ -1075,7 +1172,7 @@ export default function App() {
       // Actualizar
       const { error } = await supabase
         .from('clients')
-        .update({ ref: client.ref, atencion: client.atencion, correo: client.correo, tel: client.tel })
+        .update({ ref: client.ref, atencion: client.atencion, correo: client.correo, tel: client.tel, señores: client.señores, nit: client.nit })
         .eq('id', client.id);
       if (error) {
         console.error('Error actualizando cliente:', error);
@@ -1088,7 +1185,7 @@ export default function App() {
       // Insertar nuevo
       const { data, error } = await supabase
         .from('clients')
-        .insert({ ref: client.ref, atencion: client.atencion, correo: client.correo, tel: client.tel })
+        .insert({ ref: client.ref, atencion: client.atencion, correo: client.correo, tel: client.tel, señores: client.señores, nit: client.nit })
         .select();
       if (error) {
         console.error('Error guardando cliente:', error);
@@ -1130,6 +1227,7 @@ export default function App() {
           initialData={loadedCotiz}
           lastQuoteNumber={lastQuoteNumber}
           clients={clients}
+          onClear={() => setLoadedCotiz(null)}
         />
       )}
       {tab === 'guardadas' && (
