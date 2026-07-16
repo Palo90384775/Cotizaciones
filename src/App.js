@@ -1367,11 +1367,20 @@ export default function App() {
 
   // Funciones para clientes
   const saveClient = async (client) => {
+    const clientIdentifier = client.señores || client.atencion;
     if (client.id) {
       // Actualizar
       const { error } = await supabase
         .from('clients')
-        .update({ nombre: client.nombre, ref: client.nombre, atencion: client.atencion, correo: client.correo, tel: client.tel, señores: client.señores, nit: client.nit })
+        .update({ 
+          nombre: clientIdentifier, 
+          ref: clientIdentifier, 
+          atencion: client.atencion, 
+          correo: client.correo, 
+          tel: client.tel, 
+          señores: client.señores, 
+          nit: client.nit 
+        })
         .eq('id', client.id);
       if (error) {
         console.error('Error actualizando cliente:', error);
@@ -1384,7 +1393,15 @@ export default function App() {
       // Insertar nuevo
       const { data, error } = await supabase
         .from('clients')
-        .insert({ nombre: client.nombre, ref: client.nombre, atencion: client.atencion, correo: client.correo, tel: client.tel, señores: client.señores, nit: client.nit })
+        .insert({ 
+          nombre: clientIdentifier, 
+          ref: clientIdentifier, 
+          atencion: client.atencion, 
+          correo: client.correo, 
+          tel: client.tel, 
+          señores: client.señores, 
+          nit: client.nit 
+        })
         .select();
       if (error) {
         console.error('Error guardando cliente:', error);
