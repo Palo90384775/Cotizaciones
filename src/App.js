@@ -343,7 +343,7 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clien
                 >
                   <option value="">— Seleccionar cliente —</option>
                   {clients.map(c => (
-                    <option key={c.id} value={c.id}>{c.nombre || c.ref}</option>
+                    <option key={c.id} value={c.id}>{c.señores || c.atencion || c.nombre || c.ref}</option>
                   ))}
                 </Select>
               </Field>
@@ -997,13 +997,13 @@ function Productos({ products, onSave, onDelete }) {
 
 // ── TAB: CLIENTES ─────────────────────────────────────────────────────────────
 function Clientes({ clients, onSave, onDelete }) {
-  const blank = { nombre: '', atencion: '', correo: '', tel: '', señores: '', nit: '' };
+  const blank = { atencion: '', correo: '', tel: '', señores: '', nit: '' };
   const [form, setForm] = useState(blank);
   const [editing, setEditing] = useState(null);
 
   async function handleSave() {
-    if (!form.nombre) { 
-      toast.error('Ingresa el nombre del cliente'); 
+    if (!form.señores && !form.atencion) { 
+      toast.error('Ingresa al menos los señores o la atención'); 
       return; 
     }
     const client = { ...form, id: editing !== null ? editing.id : undefined };
@@ -1032,9 +1032,6 @@ function Clientes({ clients, onSave, onDelete }) {
         </div>
         <div className="p-6">
           <div className="grid grid-cols-2 gap-4 mb-4">
-            <Field label="Nombre del cliente">
-              <Input value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Ej: Cliente ABC" />
-            </Field>
             <Field label="Atención">
               <Input value={form.atencion} onChange={e => setForm(p => ({ ...p, atencion: e.target.value }))} placeholder="Nombre del contacto" />
             </Field>
@@ -1074,7 +1071,7 @@ function Clientes({ clients, onSave, onDelete }) {
           {clients.map((c, i) => (
             <div key={c.id} className="bg-white rounded-xl border border-gray-200 p-4 flex justify-between items-center shadow-sm hover:shadow-md transition-all duration-200">
               <div className="min-w-0 mr-3">
-                <p className="font-medium text-sm text-gray-900 truncate">{c.nombre || c.ref}</p>
+                <p className="font-medium text-sm text-gray-900 truncate">{c.señores || c.atencion || c.nombre || c.ref}</p>
                 {c.atencion && <p className="text-xs text-gray-400 mt-0.5">👤 {c.atencion}</p>}
                 {c.correo && <p className="text-xs text-gray-400">📧 {c.correo}</p>}
                 {c.tel && <p className="text-xs text-gray-400">📞 {c.tel}</p>}
@@ -1086,7 +1083,7 @@ function Clientes({ clients, onSave, onDelete }) {
                 <button onClick={async () => { 
                   const result = await Swal.fire({
                     title: '¿Eliminar cliente?',
-                    text: c.nombre || c.ref,
+                    text: c.señores || c.atencion || c.nombre || c.ref,
                     icon: 'warning',
                     showCancelButton: true,
                     confirmButtonColor: '#003087',
