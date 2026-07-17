@@ -270,7 +270,7 @@ export async function generatePDF(cotizacion) {
     const AFTER_TABLE   = 15 + 85 + 4 + 12 + 60 + 6 + 70 + 15;
     const availH        = pageHeight - TABLE_START - AFTER_TABLE;
 
-    const descColW = CW - 30 - 52 - 40 - 48 - 70 - 70 - 30 - 20; // Ajustamos para columna descuento
+    const descColW = CW - 30 - 52 - 40 - 48 - 70 - 70 - 20; // Ajustamos sin columna descuento
 
     let chosenFontSize = 9;
     let chosenPad      = 4;
@@ -306,7 +306,7 @@ export async function generatePDF(cotizacion) {
       }
     }
 
-    // ── ITEMS TABLE (with discount column) ───────────────────────────────────────────────
+    // ── ITEMS TABLE (without discount column) ───────────────────────────────────────────────
     const tableData = items.map((it, i) => [
       `${i + 1}`,
       it.desc,
@@ -314,13 +314,12 @@ export async function generatePDF(cotizacion) {
       it.unidad,
       it.cant,
       formatNumber(it.precio),
-      it.descuento || 0,
       formatNumber(calcularSubtotalItem(it)),
     ]);
 
     autoTable(doc, {
       startY: TABLE_START,
-      head: [['Ítem', 'Descripción', 'Marca', 'Unidad', 'Cantidad', 'Valor Unitario', 'Desc. %', 'Valor Total']],
+      head: [['Ítem', 'Descripción', 'Marca', 'Unidad', 'Cantidad', 'Valor Unitario', 'Valor Total']],
       body: tableData,
       theme: 'grid',
       headStyles: {
@@ -344,8 +343,7 @@ export async function generatePDF(cotizacion) {
         3: { halign: 'center', cellWidth: 40 },
         4: { halign: 'center', cellWidth: 48 },
         5: { halign: 'right',  cellWidth: 70 },
-        6: { halign: 'center', cellWidth: 30 },
-        7: { halign: 'right',  cellWidth: 70, fontStyle: 'bold' },
+        6: { halign: 'right',  cellWidth: 70, fontStyle: 'bold' },
       },
       margin: { left: ML, right: MR },
       tableLineColor: [200, 210, 228],
