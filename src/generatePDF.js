@@ -6,7 +6,7 @@ function formatNumber(n) {
 }
 
 export async function generatePDF(cotizacion) {
-  const { cliente, items, porcentajes, numero, fecha, tipoImpuesto = 'IVA', descuentoTotal = 0, descuentoTipo = 'porcentaje', textoIntro } = cotizacion;
+  const { cliente, items, porcentajes, numero, fecha, tipoImpuesto = 'IVA', descuentoTotal = 0, descuentoTipo = 'porcentaje', descuentoAplicarA = 'total', textoIntro } = cotizacion;
   const doc = new jsPDF({ unit: 'pt', format: 'letter' });
   const pageWidth  = doc.internal.pageSize.getWidth();   // 612
   const pageHeight = doc.internal.pageSize.getHeight();  // 792
@@ -24,30 +24,41 @@ export async function generatePDF(cotizacion) {
     return totalBruto;
   };
 
-  const subtotal = items.reduce((s, it) => s + calcularSubtotalItem(it), 0);
-  const vAdmin  = tipoImpuesto === 'AIU' ? subtotal * (porcentajes.admin  / 100) : 0;
-  const vImprev = tipoImpuesto === 'AIU' ? subtotal * (porcentajes.imprev / 100) : 0;
-  const vUtil   = tipoImpuesto === 'AIU' ? subtotal * (porcentajes.util   / 100) : 0;
+  let subtotal = items.reduce((s, it) => s + calcularSubtotalItem(it), 0);
+  let descuentoTotalValor = 0;
+  let subtotalDescontado = subtotal;
+  
+  if (descuentoTotal > 0 && descuentoAplicarA === 'subtotal') {
+    if (descuentoTipo === 'porcentaje') {
+      descuentoTotalValor = (descuentoTotal / 100) * subtotal;
+    } else {
+      descuentoTotalValor = descuentoTotal;
+    }
+    subtotalDescontado = subtotal - descuentoTotalValor;
+  }
+  
+  const vAdmin  = tipoImpuesto === 'AIU' ? subtotalDescontado * (porcentajes.admin  / 100) : 0;
+  const vImprev = tipoImpuesto === 'AIU' ? subtotalDescontado * (porcentajes.imprev / 100) : 0;
+  const vUtil   = tipoImpuesto === 'AIU' ? subtotalDescontado * (porcentajes.util   / 100) : 0;
   
   let vImpuesto;
   if (tipoImpuesto === 'IVA') {
-    vImpuesto = subtotal * (porcentajes.iva / 100);
+    vImpuesto = subtotalDescontado * (porcentajes.iva / 100);
   } else { // AIU
     vImpuesto = vUtil * (porcentajes.iva / 100);
   }
 
-  let totalAntesDescuento = subtotal + vAdmin + vImprev + vUtil + vImpuesto;
-  let descuentoTotalValor;
-  if (descuentoTotal > 0) {
+  let totalAntesDescuento = subtotalDescontado + vAdmin + vImprev + vUtil + vImpuesto;
+  
+  if (descuentoTotal > 0 && descuentoAplicarA === 'total') {
     if (descuentoTipo === 'porcentaje') {
       descuentoTotalValor = (descuentoTotal / 100) * totalAntesDescuento;
     } else {
       descuentoTotalValor = descuentoTotal;
     }
-  } else {
-    descuentoTotalValor = 0;
   }
-  const total = totalAntesDescuento - descuentoTotalValor;
+  
+  const total = totalAntesDescuento - (descuentoAplicarA === 'total' ? descuentoTotalValor : 0);
 
   const loadImage = (url) =>
     new Promise((resolve, reject) => {
@@ -346,7 +357,7 @@ export async function generatePDF(cotizacion) {
 
     // ── TOTALS (updated with discounts and tax type) ────────────────────────────────────────────────────
     const totals = [
-      { lbl: 'SUBTOTAL',                               val: subtotal, bold: true,  blue: false },
+      { lbl: 'SUBTOTAL',                               val: descuentoAplicarA === 'subtotal' ? subtotalDescontado : subtotal, bold: true,  blue: false },
     ];
     
     if (tipoImpuesto === 'AIU') {

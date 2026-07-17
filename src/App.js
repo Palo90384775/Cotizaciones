@@ -131,6 +131,7 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clien
   const [tipoImpuesto, setTipoImpuesto] = useState(initialData?.tipoImpuesto || 'IVA'); // 'IVA' o 'AIU'
   const [descuentoTotal, setDescuentoTotal] = useState(initialData?.descuentoTotal || 0); // % de descuento total
   const [descuentoTipo, setDescuentoTipo] = useState(initialData?.descuentoTipo || 'porcentaje'); // 'porcentaje' o 'monto'
+  const [descuentoAplicarA, setDescuentoAplicarA] = useState(initialData?.descuentoAplicarA || 'total'); // 'total' o 'subtotal'
   const [textoIntro, setTextoIntro] = useState(initialData?.textoIntro || 
     'De acuerdo a su amable solicitud tenemos el gusto de enviarle la siguiente propuesta comercial para su respectivo estudio:');
   const [spellCheckLoading, setSpellCheckLoading] = useState(false);
@@ -183,34 +184,43 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clien
     return totalBruto;
   };
 
-  const subtotal = items.reduce((s, it) => s + calcularSubtotalItem(it), 0);
-  const vAdmin = tipoImpuesto === 'AIU' ? subtotal * (porc.admin / 100) : 0;
-  const vImprev = tipoImpuesto === 'AIU' ? subtotal * (porc.imprev / 100) : 0;
-  const vUtil = tipoImpuesto === 'AIU' ? subtotal * (porc.util / 100) : 0;
+  let subtotal = items.reduce((s, it) => s + calcularSubtotalItem(it), 0);
+  let descuentoTotalValor = 0;
+  let subtotalDescontado = subtotal;
+  
+  if (descuentoTotal > 0 && descuentoAplicarA === 'subtotal') {
+    if (descuentoTipo === 'porcentaje') {
+      descuentoTotalValor = (descuentoTotal / 100) * subtotal;
+    } else {
+      descuentoTotalValor = descuentoTotal;
+    }
+    subtotalDescontado = subtotal - descuentoTotalValor;
+  }
+  
+  const vAdmin = tipoImpuesto === 'AIU' ? subtotalDescontado * (porc.admin / 100) : 0;
+  const vImprev = tipoImpuesto === 'AIU' ? subtotalDescontado * (porc.imprev / 100) : 0;
+  const vUtil = tipoImpuesto === 'AIU' ? subtotalDescontado * (porc.util / 100) : 0;
   
   // Calcular impuesto (IVA o AIU)
   let vImpuesto;
   if (tipoImpuesto === 'IVA') {
-    vImpuesto = subtotal * (porc.iva / 100);
+    vImpuesto = subtotalDescontado * (porc.iva / 100);
   } else { // AIU
     vImpuesto = vUtil * (porc.iva / 100);
   }
   
-  // Aplicar descuento total
-  let totalAntesDescuento = subtotal + vAdmin + vImprev + vUtil + vImpuesto;
-  let descuentoTotalValor;
+  // Aplicar descuento total si es al total
+  let totalAntesDescuento = subtotalDescontado + vAdmin + vImprev + vUtil + vImpuesto;
   
-  if (descuentoTotal > 0) {
+  if (descuentoTotal > 0 && descuentoAplicarA === 'total') {
     if (descuentoTipo === 'porcentaje') {
       descuentoTotalValor = (descuentoTotal / 100) * totalAntesDescuento;
     } else {
       descuentoTotalValor = descuentoTotal;
     }
-  } else {
-    descuentoTotalValor = 0;
   }
   
-  const total = totalAntesDescuento - descuentoTotalValor;
+  const total = totalAntesDescuento - (descuentoAplicarA === 'total' ? descuentoTotalValor : 0);
 
   function handleProdSelect(e) {
     const idx = e.target.value;
@@ -285,6 +295,7 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clien
         tipoImpuesto,
         descuentoTotal,
         descuentoTipo,
+        descuentoAplicarA,
         textoIntro
       });
       toast.success('PDF generado exitosamente!');
@@ -532,7 +543,7 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clien
             {/* Descuento total */}
             <div className="bg-[#f8fafc] rounded-lg p-4 border border-gray-100">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Descuento total</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 mb-3">
                 <div className="col-span-1">
                   <div className="flex gap-2">
                     <button 
@@ -566,6 +577,30 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clien
                     placeholder="0"
                   />
                 </Field>
+              </div>
+              <div className="col-span-2">
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => setDescuentoAplicarA('total')}
+                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all border-2 ${
+                      descuentoAplicarA === 'total' 
+                        ? 'bg-[#003087] text-white border-[#003087]' 
+                        : 'bg-white text-gray-700 border-gray-200'
+                    }`}
+                  >
+                    Aplicar al total
+                  </button>
+                  <button 
+                    onClick={() => setDescuentoAplicarA('subtotal')}
+                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all border-2 ${
+                      descuentoAplicarA === 'subtotal' 
+                        ? 'bg-[#003087] text-white border-[#003087]' 
+                        : 'bg-white text-gray-700 border-gray-200'
+                    }`}
+                  >
+                    Aplicar al subtotal
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -754,7 +789,7 @@ function NuevaCotizacion({ products, onSave, initialData, lastQuoteNumber, clien
               <div className="w-80 space-y-1">
                 <div className="flex justify-between text-sm py-1 border-b border-gray-100">
                   <span className="text-gray-600">SUBTOTAL</span>
-                  <span className="font-medium">{fmt(subtotal)}</span>
+                  <span className="font-medium">{fmt(descuentoAplicarA === 'subtotal' ? subtotalDescontado : subtotal)}</span>
                 </div>
                 {tipoImpuesto === 'AIU' && (
                   <>
@@ -1156,6 +1191,7 @@ export default function App() {
           tipoImpuesto: q.tipo_impuesto,
           descuentoTotal: q.descuento_total,
           descuentoTipo: q.descuento_tipo,
+          descuentoAplicarA: q.descuento_aplicar_a || 'total',
           textoIntro: q.texto_intro,
           items: q.quote_items || []
         })));
@@ -1187,6 +1223,7 @@ export default function App() {
           tipo_impuesto: c.tipoImpuesto,
           descuento_total: c.descuentoTotal,
           descuento_tipo: c.descuentoTipo,
+          descuento_aplicar_a: c.descuentoAplicarA,
           texto_intro: c.textoIntro
         })
         .eq('id', c.id);
@@ -1257,6 +1294,7 @@ export default function App() {
           tipo_impuesto: c.tipoImpuesto,
           descuento_total: c.descuentoTotal,
           descuento_tipo: c.descuentoTipo,
+          descuento_aplicar_a: c.descuentoAplicarA,
           texto_intro: c.textoIntro
         })
         .select();
@@ -1298,6 +1336,7 @@ export default function App() {
         tipoImpuesto: quoteData[0].tipo_impuesto,
         descuentoTotal: quoteData[0].descuento_total,
         descuentoTipo: quoteData[0].descuento_tipo,
+        descuentoAplicarA: quoteData[0].descuento_aplicar_a || 'total',
         textoIntro: quoteData[0].texto_intro,
         items: c.items
       }, ...prev]);
